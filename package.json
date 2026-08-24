@@ -1,0 +1,68 @@
+{
+  "name": "dsh-session-explorer",
+  "version": "0.1.0",
+  "description": "DSH Web 出树插件：会话消息级全文检索与时间线可视化浏览器。检索具体到某一条消息（正文/工具名/参数/错误摘要），时间线画布浏览全部会话，只读上下文预览。",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-home-paths": ">=0.1.0-rc.6",
+    "zod": "^4.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build:host": "tsc -p tsconfig.json",
+    "build:client": "node scripts/build-client.mjs",
+    "prepack": "pnpm build",
+    "test": "tsx --test test/*.test.ts",
+    "pack:check": "pnpm pack --dry-run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.25.0",
+    "rolldown": "^1.2.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.3.0"
+  },
+  "peerDependenciesMeta": {}
+}

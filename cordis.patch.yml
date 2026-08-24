@@ -1,0 +1,6 @@
+# dsh-session-explorer bundle patch.
+# `dsh plugin --profile web add <path>` installs the package and appends it
+# to dsh.profile.bundles, applying this layer — no manual patch editing.
+- insert:
+    - id: session-explorer
+      name: dsh-session-explorer
