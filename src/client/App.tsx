@@ -145,13 +145,15 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
           >
             消息检索
           </button>
-          <button
+          {/* 时间线入口暂时隐藏：@xyflow/react 画布存在严重渲染 bug，修复后恢复。
+              保留 TimelineView 组件与路由，仅隐藏入口（view.name === 'timeline' 分支仍可被代码进入）。 */}
+          {/* <button
             type="button"
             className={'sex-tab' + (view.name === 'timeline' ? ' sex-tab-on' : '')}
             onClick={openTimeline}
           >
             时间线
-          </button>
+          </button> */}
         </div>
         <div className="sex-header-right">
           {indexStatus && (
