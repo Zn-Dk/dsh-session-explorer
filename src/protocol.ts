@@ -68,6 +68,8 @@ export interface IndexStatus {
   staleSessions: number
   failedSessions: number
   lastSyncAt: number | null
+  /** 索引里有但磁盘已不存在的会话数（应清理）。 */
+  ghostSessions: number
 }
 
 /** 搜索请求。 */

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { SessionIndex, DB_APP_ID, DB_USER_VERSION } from '../src/indexer.js'
+import { SessionIndex, DB_APP_ID, DB_USER_VERSION, fingerprintOf } from '../src/indexer.js'
 import type { IndexableMessage } from '../src/protocol.js'
 
 function tmpDb() {
@@ -25,7 +25,7 @@ function msg(overrides: Partial<IndexableMessage> = {}): IndexableMessage {
   }
 }
 
-function meta(overrides: Partial<{ sessionId: string; title: string | null; cwd: string | null; createdAt: number; updatedAt: number }> = {}) {
+function meta(overrides: Partial<{ sessionId: string; title: string | null; cwd: string | null; createdAt: number; updatedAt: number; logFingerprint: string | null }> = {}) {
   return {
     sessionId: 's1',
     title: '重构 indexer',
@@ -215,6 +215,93 @@ test('sessionMeta reflects latest sync', () => {
     const snap = index.sessionMeta('s1')
     assert.ok(snap)
     assert.equal(snap!.messageCount, 1)
+  } finally {
+    index.close()
+  }
+})
+
+test('fingerprintOf reflects message content changes', () => {
+  const a = [msg({ seq: 1, textMain: 'hello', time: 1000 })]
+  const b = [msg({ seq: 1, textMain: 'world', time: 1000 })]
+  const c = [msg({ seq: 2, textMain: 'hello', time: 2000 })]
+  assert.notEqual(fingerprintOf(a), fingerprintOf(b))
+  assert.notEqual(fingerprintOf(a), fingerprintOf(c))
+  assert.equal(fingerprintOf(a), fingerprintOf(a))
+})
+
+test('upsertSession writes fingerprint and listFingerprints reads it', () => {
+  const index = SessionIndex.open(tmpDb())
+  try {
+    const messages = [msg({ seq: 1, textMain: 'hi' })]
+    const fp = fingerprintOf(messages)
+    index.upsertSession(meta({ logFingerprint: fp }), messages)
+    const map = index.listFingerprints()
+    assert.equal(map.get('s1'), fp)
+  } finally {
+    index.close()
+  }
+})
+
+test('healthCheck passes on a fresh healthy db', () => {
+  const index = SessionIndex.open(tmpDb())
+  try {
+    const result = index.healthCheck()
+    assert.equal(result.healthy, true)
+    assert.deepEqual(result.problems, [])
+  } finally {
+    index.close()
+  }
+})
+
+test('reset clears sessions and messages', () => {
+  const index = SessionIndex.open(tmpDb())
+  try {
+    index.upsertSession(meta(), [msg({ seq: 1, textMain: 'x' })])
+    assert.equal(index.countMessages('s1'), 1)
+    index.reset()
+    assert.equal(index.countMessages('s1'), 0)
+    assert.equal(index.timeline().length, 0)
+    assert.equal(index.search('x').items.length, 0)
+  } finally {
+    index.close()
+  }
+})
+
+test('schema migration adds log_fingerprint/log_revision columns to v1 db', () => {
+  const file = tmpDb()
+  // 手工造一个 v1 库（无 log_fingerprint 列）
+  const db = new DatabaseSync(file)
+  db.exec('PRAGMA application_id = ' + DB_APP_ID)
+  db.exec('PRAGMA user_version = 1')
+  db.exec(`CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY,
+    title TEXT,
+    cwd TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    tool_count INTEGER NOT NULL DEFAULT 0,
+    indexed_at INTEGER NOT NULL
+  ) WITHOUT ROWID`)
+  db.exec(`CREATE TABLE messages (
+    session_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    turn INTEGER,
+    text_main TEXT NOT NULL DEFAULT '',
+    text_tool TEXT NOT NULL DEFAULT ''
+  )`)
+  db.close()
+  // open 应迁移到 v2 并加列
+  const index = SessionIndex.open(file)
+  try {
+    const check = index.listFingerprints()
+    assert.equal(check.size, 0)
+    const uv = new DatabaseSync(file)
+    const version = uv.prepare('PRAGMA user_version').get()
+    uv.close()
+    assert.equal(version.user_version, 3)
   } finally {
     index.close()
   }

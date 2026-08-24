@@ -23,7 +23,7 @@ import { makeSnippet } from './transcript.js'
 /** 私有库标记。 */
 export const DB_APP_ID = 0x44534530 // 'DSE0'
 /** 结构版本：schema 变更时 +1。 */
-export const DB_USER_VERSION = 1
+export const DB_USER_VERSION = 3
 
 /** 每会话元数据（同步层传入）。 */
 export interface SessionMeta {
@@ -32,6 +32,37 @@ export interface SessionMeta {
   cwd: string | null
   createdAt: number
   updatedAt: number
+  /** 源日志指纹（增量重建判断内容是否变化）；未提供时写入 null。 */
+  logFingerprint?: string | null
+  /** 源日志 revision（engine listSnapshots 的轻量变更 token；O(1) 快速 diff）。 */
+  logRevision?: string | null
+}
+
+/** djb2 字符串哈希（轻量、稳定，不追求密码学强度）。 */
+function djb2(text: string): number {
+  let hash = 5381
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0
+  }
+  return hash >>> 0
+}
+
+/** 从折叠后的消息计算源日志指纹（内容变化 → 指纹变化）。 */
+export function fingerprintOf(messages: IndexableMessage[]): string {
+  if (messages.length === 0) return '0:0:0:0'
+  let contentHash = 5381
+  let lastSeq = 0
+  let lastTime = 0
+  for (const message of messages) {
+    // 只哈希 textMain/textTool，避免 sessionId/turn 等不影响检索的字段造成无谓重刷
+    contentHash = ((contentHash << 5) + contentHash + djb2(message.textMain)) | 0
+    contentHash = ((contentHash << 5) + contentHash + djb2(message.textTool)) | 0
+    if (message.seq > lastSeq) {
+      lastSeq = message.seq
+      lastTime = message.time
+    }
+  }
+  return messages.length + ':' + lastSeq + ':' + lastTime + ':' + (contentHash >>> 0)
 }
 
 /** bm25 列权重：text_main 10 倍于 text_tool。 */
@@ -46,7 +77,10 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL,
     message_count INTEGER NOT NULL DEFAULT 0,
     tool_count INTEGER NOT NULL DEFAULT 0,
-    indexed_at INTEGER NOT NULL
+    indexed_at INTEGER NOT NULL,
+    log_fingerprint TEXT,
+    log_revision TEXT,
+    error TEXT
   ) WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS messages (
     session_id TEXT NOT NULL,
@@ -102,7 +136,8 @@ export class SessionIndex {
           db.close()
           throw new Error(`refusing foreign sqlite file (application_id=${appId}): ${path}`)
         }
-        if (userVersion !== DB_USER_VERSION) {
+        // 仅支持向前迁移；版本高于当前实现（或低于 v1）拒绝
+        if (userVersion > DB_USER_VERSION || userVersion < 1) {
           db.close()
           throw new Error(`refusing version mismatch (user_version=${userVersion}, want ${DB_USER_VERSION}): ${path}`)
         }
@@ -113,6 +148,20 @@ export class SessionIndex {
       db.exec('PRAGMA journal_mode = WAL')
       db.exec('PRAGMA synchronous = NORMAL')
       for (const stmt of SCHEMA) db.exec(stmt)
+      // 迁移：v1 → v2 补 log_fingerprint 列（无数据，按缺指纹处理 → 增量重建时全量重刷一次）
+      if (existed && userVersion >= 1 && userVersion < DB_USER_VERSION) {
+        const columns = db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
+        if (!columns.some((column) => column.name === 'log_fingerprint')) {
+          db.exec('ALTER TABLE sessions ADD COLUMN log_fingerprint TEXT')
+        }
+        if (!columns.some((column) => column.name === 'log_revision')) {
+          db.exec('ALTER TABLE sessions ADD COLUMN log_revision TEXT')
+        }
+        if (!columns.some((column) => column.name === 'error')) {
+          db.exec('ALTER TABLE sessions ADD COLUMN error TEXT')
+        }
+        db.exec(`PRAGMA user_version = ${DB_USER_VERSION}`)
+      }
       const index = new SessionIndex(db, path)
       index.chmod()
       return index
@@ -173,13 +222,15 @@ export class SessionIndex {
         if (message.kind === 'tool') toolCount++
       }
 
-      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, indexed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, indexed_at, log_fingerprint, log_revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           title = excluded.title, cwd = excluded.cwd, created_at = excluded.created_at,
           updated_at = excluded.updated_at, message_count = excluded.message_count,
-          tool_count = excluded.tool_count, indexed_at = excluded.indexed_at`)
-        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, now)
+          tool_count = excluded.tool_count, indexed_at = excluded.indexed_at,
+          log_fingerprint = excluded.log_fingerprint, log_revision = excluded.log_revision,
+          error = NULL`)
+        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, now, meta.logFingerprint ?? null, meta.logRevision ?? null)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -350,20 +401,33 @@ export class SessionIndex {
 
   /** 索引健康状态（与外部已知会话列表对比）。 */
   indexStatus(knownSessionIds: string[]): IndexStatus {
-    const indexedRows = this.db.prepare('SELECT session_id, indexed_at FROM sessions').all() as Array<Record<string, unknown>>
-    const indexed = new Set(indexedRows.map((row) => String(row.session_id)))
-    const stale = knownSessionIds.filter((id) => !indexed.has(id))
+    const indexedRows = this.db.prepare('SELECT session_id, indexed_at, error FROM sessions').all() as Array<Record<string, unknown>>
+    const known = new Set(knownSessionIds)
+    const failedIds = new Set<string>()
+    const indexedOk = new Set<string>()
+    for (const row of indexedRows) {
+      const id = String(row.session_id)
+      if (row.error !== null && row.error !== undefined) failedIds.add(id)
+      else indexedOk.add(id)
+    }
+    // 待同步 = 磁盘有但既未成功索引、也未标记失败
+    const stale = knownSessionIds.filter((id) => !indexedOk.has(id) && !failedIds.has(id))
+    // 幽灵 = 索引里有（成功或失败）但磁盘已不存在
+    const ghost = indexedRows.filter((row) => !known.has(String(row.session_id)))
     let lastSyncAt: number | null = null
     for (const row of indexedRows) {
       const value = Number(row.indexed_at)
       if (lastSyncAt === null || value > lastSyncAt) lastSyncAt = value
     }
+    // 成功索引数只算「磁盘存在」的（排除幽灵），避免 337/336 溢出
+    const indexedSessions = knownSessionIds.filter((id) => indexedOk.has(id)).length
     return {
       totalSessions: knownSessionIds.length,
-      indexedSessions: indexedRows.length,
+      indexedSessions,
       staleSessions: stale.length,
-      failedSessions: 0, // 失败仅在同步日志记录；索引库只保留成功状态
+      failedSessions: failedIds.size,
       lastSyncAt,
+      ghostSessions: ghost.length,
     }
   }
 
@@ -380,5 +444,63 @@ export class SessionIndex {
       | undefined
     if (!row) return null
     return { indexedAt: Number(row.indexed_at), messageCount: Number(row.message_count) }
+  }
+
+  /** 记录一个会话索引失败（损坏等），供 indexStatus 区分「待同步」与「损坏」。 */
+  markFailed(sessionId: string, error: string): void {
+    this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, indexed_at, error)
+      VALUES (?, NULL, NULL, 0, 0, 0, 0, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET error = excluded.error, indexed_at = excluded.indexed_at`)
+      .run(sessionId, Date.now(), error)
+  }
+
+  /** 读当前索引的全部 session_id → 指纹映射（增量重建 diff 用）。 */
+  listFingerprints(): Map<string, string | null> {
+    const rows = this.db.prepare('SELECT session_id, log_fingerprint FROM sessions').all() as Array<Record<string, unknown>>
+    const map = new Map<string, string | null>()
+    for (const row of rows) map.set(String(row.session_id), row.log_fingerprint === null || row.log_fingerprint === undefined ? null : String(row.log_fingerprint))
+    return map
+  }
+
+  /** 读当前索引的全部 session_id → revision 映射（增量重建快速 diff 用）。 */
+  listRevisions(): Map<string, string | null> {
+    const rows = this.db.prepare('SELECT session_id, log_revision FROM sessions').all() as Array<Record<string, unknown>>
+    const map = new Map<string, string | null>()
+    for (const row of rows) map.set(String(row.session_id), row.log_revision === null || row.log_revision === undefined ? null : String(row.log_revision))
+    return map
+  }
+
+  /** 索引库健康检查：integrity + 关键表存在 + FTS 可查询。 */
+  healthCheck(): { healthy: boolean; problems: string[] } {
+    const problems: string[] = []
+    try {
+      const integrity = this.db.prepare('PRAGMA integrity_check').all() as Array<Record<string, unknown>>
+      const ok = integrity.every((row) => String(row.integrity_check) === 'ok')
+      if (!ok) problems.push('integrity_check failed')
+    } catch (error) {
+      problems.push('integrity_check error: ' + (error instanceof Error ? error.message : String(error)))
+    }
+    try {
+      this.db.prepare('SELECT COUNT(*) FROM messages').get()
+      this.db.prepare('SELECT COUNT(*) FROM messages_fts').get()
+    } catch (error) {
+      problems.push('required tables missing/unreadable: ' + (error instanceof Error ? error.message : String(error)))
+    }
+    return { healthy: problems.length === 0, problems }
+  }
+
+  /** 清空全部索引（全量重建前的原子 reset）。 */
+  reset(): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.exec(`INSERT INTO messages_fts(messages_fts, rowid, text_main, text_tool)
+        SELECT 'delete', rowid, text_main, text_tool FROM messages`)
+      this.db.exec('DELETE FROM messages')
+      this.db.exec('DELETE FROM sessions')
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 }
