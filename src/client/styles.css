@@ -1,0 +1,440 @@
+/* 面板覆盖层：注入 conversation 列内，absolute 填充，不透明 bg-base */
+[data-pane=conversation], [class*=centerCol] {
+  position: relative;
+}
+[data-dsh-session-explorer-view] {
+  z-index: 60;
+  background: var(--dsw-alias-bg-base);
+  min-width: 0;
+  min-height: 0;
+  display: none;
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+html[data-dsh-session-explorer-active] [data-dsh-session-explorer-view] {
+  display: block;
+}
+html[data-dsh-session-explorer-active] [data-pane=conversation] > :not([data-dsh-session-explorer-view]),
+html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-session-explorer-view]) {
+  display: none !important;
+}
+/**
+ * client/styles.css —— 面板样式（DSH design tokens + xyflow 覆盖）。
+ * 构建脚本会把它内联进 bundle（tagId 幂等注入）。
+ */
+
+.sex-app {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  font-family: inherit;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sex-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+}
+
+.sex-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.sex-tab {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #555);
+  cursor: pointer;
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 20px;
+  border-radius: 8px;
+}
+
+.sex-tab:hover {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-specific-sidebar-nav-item-hover, rgba(0,0,0,.04));
+}
+
+.sex-tab-on {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-specific-sidebar-nav-item-active, rgba(0,0,0,.08));
+  font-weight: 600;
+}
+
+.sex-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sex-status {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+}
+
+.sex-close {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #888);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.sex-close:hover {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-specific-sidebar-nav-item-hover, rgba(0,0,0,.04));
+}
+
+.sex-notice {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--dsw-alias-state-success-primary, #059669);
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+}
+
+.sex-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 搜索 */
+.sex-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sex-search-bar {
+  display: flex;
+}
+
+.sex-input {
+  flex: 1;
+  height: 36px;
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  outline: none;
+}
+
+.sex-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3, #c7d2fe);
+}
+
+.sex-kind-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sex-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #555);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sex-kind-chip:hover {
+  border-color: var(--dsw-alias-border-l3, #c7d2fe);
+}
+
+.sex-kind-on {
+  border-color: var(--dsw-alias-state-business-primary, #4f46e5);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4f46e5) 10%, transparent);
+}
+
+.sex-kind-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.sex-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sex-hit {
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sex-hit:hover {
+  border-color: var(--dsw-alias-border-l3, #c7d2fe);
+}
+
+.sex-hit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sex-hit-kind {
+  font-size: 11px;
+  font-weight: 600;
+  flex: none;
+}
+
+.sex-hit-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.sex-hit-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+  flex: none;
+}
+
+.sex-hit-snippet {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary, #555);
+  word-break: break-word;
+}
+
+.sex-hit-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sex-hit-cwd {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sex-mini-btn {
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  background: var(--dsw-alias-bg-layer-2, #f9fafb);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  border-radius: 7px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sex-mini-btn:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l3, #c7d2fe);
+}
+
+.sex-mini-btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.sex-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sex-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary, #888);
+  font-size: 13px;
+}
+
+.sex-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #dc2626) 10%, transparent);
+  color: var(--dsw-alias-state-error-primary, #dc2626);
+  font-size: 12px;
+  word-break: break-all;
+  margin: 10px 16px;
+}
+
+/* 时间线 */
+.sex-flow {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.sex-flow .react-flow__node {
+  font-size: 12px;
+}
+
+.sex-flow .react-flow__node-group {
+  border: 1px dashed;
+}
+
+/* 预览 */
+.sex-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.sex-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+}
+
+.sex-preview-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sex-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sex-msg {
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sex-msg-focus {
+  border-color: var(--dsw-alias-state-business-primary, #4f46e5);
+  box-shadow: 0 0 0 1px var(--dsw-alias-state-business-primary, #4f46e5);
+}
+
+.sex-msg-user .sex-msg-body {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4f46e5) 6%, transparent);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.sex-msg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sex-msg-kind {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sex-msg-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+}
+
+.sex-msg-body {
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+/* 侧栏入口 */
+.sex-entry {
+  width: 100%;
+  height: 32px;
+  color: var(--dsw-alias-label-secondary, #555);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.sex-entry:hover {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-specific-sidebar-nav-item-hover, rgba(0,0,0,.04));
+}
+
+.sex-entry[data-active] {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  background: var(--dsw-specific-sidebar-nav-item-active, rgba(0,0,0,.08));
+  font-weight: 600;
+}
+
+.sex-entry-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+.sex-entry-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.sex-entry-label {
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
