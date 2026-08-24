@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import type { ExplorerClient } from '../store.js'
+import { envelopeError, type ExplorerClient } from '../store.js'
 import type { IndexableMessage, PreviewPage } from '../../protocol.js'
 
 export interface PreviewViewProps {
@@ -63,7 +63,7 @@ export function PreviewView({ client, sessionId, seq, onBack, onOpenSession }: P
         const res = await client.preview(sessionId, seq, 20, 20)
         if (cancelled) return
         if (!res.ok) {
-          setState({ status: 'error', page: null, error: res.message ?? 'preview failed' })
+          setState({ status: 'error', page: null, error: envelopeError(res) || 'preview failed' })
           return
         }
         setState({ status: 'ready', page: res.value ?? null, error: null })

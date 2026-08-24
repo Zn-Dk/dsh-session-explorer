@@ -48,12 +48,27 @@ export function createPanelStore() {
 
 export type PanelStore = ReturnType<typeof createPanelStore>
 
-/** RPC 结果包（host dispatch 的返回形状）。 */
+/** RPC 结果包（host dispatch 的返回形状：ok true → value；ok false → error）。 */
 export interface RpcEnvelope<T> {
   ok: boolean
   value?: T
+  /** 失败时的错误对象（引擎 rpcResultSchema 形状）。 */
+  error?: { code: string; message: string; details?: Record<string, unknown> }
+  /** 兼容：部分路径直接给 code/message（旧形状）。 */
   code?: string
   message?: string
+}
+
+/** 从 envelope 提取可显示的错误文本。 */
+export function envelopeError(res: { ok: boolean; error?: { message?: string; code?: string }; code?: string; message?: string }): string {
+  if (!res.ok) {
+    if (res.error?.message) return res.error.message
+    if (res.message) return res.message
+    if (res.error?.code) return res.error.code
+    if (res.code) return res.code
+    return '未知错误'
+  }
+  return ''
 }
 
 /** client 侧 rpc 封装。 */
@@ -62,7 +77,21 @@ export interface ExplorerClient {
   timeline(limit?: number): Promise<RpcEnvelope<TimelineNode[]>>
   preview(sessionId: string, seq: number, before?: number, after?: number): Promise<RpcEnvelope<PreviewPage | null>>
   indexStatus(): Promise<RpcEnvelope<IndexStatus>>
-  rebuild(): Promise<RpcEnvelope<{ total: number; succeeded: number; failed: number }>>
+  /** 打开面板时触发一次轻量同步（live 会话 + 未索引新会话）。 */
+  sync(): Promise<RpcEnvelope<{ synced: number; failed: number }>>
+  /** 索引库健康检查（dialog 展示用）。 */
+  healthCheck(): Promise<RpcEnvelope<{ healthy: boolean; problems: string[] }>>
+  rebuild(mode: 'incremental' | 'full'): Promise<RpcEnvelope<{
+    mode: string
+    total: number
+    added: number
+    removed: number
+    refreshed: number
+    skipped: number
+    succeeded: number
+    failed: number
+    failures: Array<{ sessionId: string; indexed: boolean; error?: string }>
+  }>>
 }
 
 /**
@@ -75,13 +104,27 @@ export function createExplorerClient(connection: unknown, channel: string): Expl
   if (!rpc || typeof rpc.call !== 'function') {
     throw new Error('dsh-session-explorer: connection.rpc.call is unavailable')
   }
-  const call = (method: string, payload?: unknown): Promise<unknown> => rpc.call!(channel, method, payload)
+  // payload 必须始终可 JSON 序列化且非 undefined：引擎 clientRequestSchema 要求
+  // payload 字段存在（z.unknown() 非 optional），undefined 会被 JSON.stringify 丢弃 → 请求校验失败。
+  const call = (method: string, payload?: unknown): Promise<unknown> => rpc.call!(channel, method, payload === undefined ? {} : payload)
   return {
     search: (request) => call('search', request) as Promise<RpcEnvelope<SearchResponse>>,
     timeline: (limit) => call('timeline', limit ? { limit } : {}) as Promise<RpcEnvelope<TimelineNode[]>>,
     preview: (sessionId, seq, before, after) => call('preview', { sessionId, seq, before, after }) as Promise<RpcEnvelope<PreviewPage | null>>,
     indexStatus: () => call('indexStatus') as Promise<RpcEnvelope<IndexStatus>>,
-    rebuild: () => call('rebuild') as Promise<RpcEnvelope<{ total: number; succeeded: number; failed: number }>>,
+    sync: () => call('sync') as Promise<RpcEnvelope<{ synced: number; failed: number }>>,
+    healthCheck: () => call('healthCheck') as Promise<RpcEnvelope<{ healthy: boolean; problems: string[] }>>,
+    rebuild: (mode) => call('rebuild', { mode }) as Promise<RpcEnvelope<{
+      mode: string
+      total: number
+      added: number
+      removed: number
+      refreshed: number
+      skipped: number
+      succeeded: number
+      failed: number
+      failures: Array<{ sessionId: string; indexed: boolean; error?: string }>
+    }>>,
   }
 }
 

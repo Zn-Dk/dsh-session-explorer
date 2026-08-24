@@ -83,6 +83,27 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary, #888);
 }
+.sex-status-stale {
+  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+.sex-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 50%;
+  color: var(--dsw-alias-label-tertiary, #888);
+  cursor: help;
+  font-size: 11px;
+  line-height: 1;
+  user-select: none;
+}
+.sex-help-icon:hover {
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  border-color: var(--dsw-alias-border-l3, #c7d2fe);
+}
 
 .sex-close {
   border: none;
@@ -437,4 +458,87 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
 .sex-entry-label {
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+
+/* 重建索引 dialog */
+.sex-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.4));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.sex-modal {
+  background: var(--dsw-alias-bg-base, #fff);
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  box-shadow: var(--dsw-shadow-lv3, 0 8px 24px rgba(0,0,0,.12));
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+}
+.sex-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.sex-modal-hint {
+  color: var(--dsw-alias-label-tertiary, #888);
+  font-size: 12px;
+}
+.sex-modal-warn {
+  border: 1px solid var(--dsw-alias-state-error-primary, #dc2626);
+  color: var(--dsw-alias-state-error-primary, #dc2626);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #dc2626) 8%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.sex-modal-sub {
+  display: block;
+  color: var(--dsw-alias-label-tertiary, #888);
+  font-size: 11px;
+  line-height: 16px;
+  margin-top: 2px;
+}
+.sex-radio-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  border-radius: 10px;
+}
+.sex-radio-row:hover {
+  border-color: var(--dsw-alias-border-l3, #c7d2fe);
+}
+.sex-radio-row input[type="radio"] {
+  margin-top: 2px;
+  flex: none;
+}
+.sex-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+.sex-primary-btn {
+  background: var(--dsw-alias-button-info-fill, #4f46e5);
+  color: var(--dsw-alias-label-primary-foreground, #fff);
+  border-color: transparent;
+  font-weight: 600;
+}
+.sex-primary-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover, #4338ca);
 }

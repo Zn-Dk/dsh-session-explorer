@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { ExplorerClient } from '../store.js'
+import { envelopeError, type ExplorerClient } from '../store.js'
 import type { MessageHit, MessageKind, SearchResponse } from '../../protocol.js'
 
 export interface SearchViewProps {
@@ -49,7 +49,7 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
       const res = await client.search({ query, kinds: kinds.length ? kinds : undefined, limit: 50, offset })
       if (controller.signal.aborted) return
       if (!res.ok) {
-        setState({ status: 'error', items: [], nextOffset: undefined, error: res.message ?? 'search failed' })
+        setState({ status: 'error', items: [], nextOffset: undefined, error: envelopeError(res) || 'search failed' })
         return
       }
       const value = res.value ?? { items: [], nextOffset: undefined }

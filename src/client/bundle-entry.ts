@@ -168,6 +168,7 @@ function mountPanel(
   store: PanelStore,
   onOpenSession: (id: string) => void,
   reactDomClient: { createRoot: (el: Element) => ReactRootLike },
+  Tooltip?: unknown,
 ): () => void {
   let root: ReactRootLike | undefined
   let container: HTMLDivElement | undefined
@@ -192,6 +193,7 @@ function mountPanel(
       store,
       onOpenSession,
       onClose: () => { store.close() },
+      Tooltip,
     }))
   }
   const waitObserver = new MutationObserver(() => { ensure() })
@@ -243,6 +245,7 @@ export function factory(require: (spec: string) => unknown) {
   function apply(ctx: ClientCtxLike) {
     if (typeof document === 'undefined') return
     const reactDomClient = require('react-dom/client') as { createRoot: (el: Element) => ReactRootLike }
+    const Tooltip = (require('@deepseek-ai/dsh-client-ui-primitives') as { Tooltip?: unknown })?.Tooltip
 
     const client = createExplorerClient(ctx.connection, CHANNEL)
     const store = createPanelStore()
@@ -261,7 +264,7 @@ export function factory(require: (spec: string) => unknown) {
     }
 
     const disposeEntry = mountSidebarEntry(store, '会话浏览器')
-    const disposePanel = mountPanel(client, store, onOpenSession, reactDomClient)
+    const disposePanel = mountPanel(client, store, onOpenSession, reactDomClient, Tooltip)
     ctx.effect?.(() => () => {
       disposePanel()
       disposeEntry()
