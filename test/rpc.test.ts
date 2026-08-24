@@ -32,7 +32,7 @@ test('dispatch rejects invalid search args', async () => {
   const handlers = fakeHandlers()
   const result = await dispatch(handlers, 'search', { query: '' })
   assert.ok(!result.ok)
-  if (!result.ok) assert.equal(result.code, 'invalid-request')
+  if (!result.ok) assert.equal(result.error.code, 'bad-request')
   assert.equal(handlers.calls.search, undefined)
 })
 
@@ -67,7 +67,7 @@ test('dispatch rejects unknown method', async () => {
   const handlers = fakeHandlers()
   const result = await dispatch(handlers, 'nope', {})
   assert.ok(!result.ok)
-  if (!result.ok) assert.equal(result.code, 'unknown-method')
+  if (!result.ok) assert.match(result.error.message, /unknown method/)
 })
 
 test('handler exceptions become result packages', async () => {
@@ -78,7 +78,7 @@ test('handler exceptions become result packages', async () => {
   })
   const result = await dispatch(handlers, 'search', { query: 'x' })
   assert.ok(!result.ok)
-  if (!result.ok) assert.match(result.message, /boom/)
+  if (!result.ok) assert.match(result.error.message, /boom/)
 })
 
 test('schema bounds: limit capped at 200, preview window at 50', () => {

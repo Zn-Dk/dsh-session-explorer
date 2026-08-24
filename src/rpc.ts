@@ -11,13 +11,21 @@ import type {
   ExplorerRpc,
   MessageKind,
   PreviewRequest,
+  RebuildRequest,
   SearchRequest,
   SearchResponse,
   TimelineRequest,
 } from './protocol.js'
 
-/** 单个 RPC 调用的结果包。 */
-export type RpcResult<T> = { ok: true; value: T } | { ok: false; code: string; message: string }
+/** 引擎 rpcResultSchema 的错误分支形状（code 必须是 rpcErrorSchema 的合法值）。 */
+export interface RpcError {
+  code: string
+  message: string
+  details: Record<string, unknown>
+}
+
+/** 单个 RPC 调用的结果包（与引擎 rpcResultSchema 对齐）。 */
+export type RpcResult<T> = { ok: true; value: T } | { ok: false; error: RpcError }
 
 /** 业务 handler 抛错时把任意错误压成结果包。 */
 export async function toResult<T>(run: () => Promise<T> | T): Promise<RpcResult<T>> {
@@ -27,8 +35,11 @@ export async function toResult<T>(run: () => Promise<T> | T): Promise<RpcResult<
   } catch (error) {
     return {
       ok: false as const,
-      code: 'internal',
-      message: error instanceof Error ? error.message : String(error),
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+        details: {},
+      },
     }
   }
 }
@@ -51,6 +62,10 @@ export const timelineRequestSchema = z.object({
   limit: z.number().int().min(1).max(1000).optional(),
 })
 
+export const rebuildRequestSchema = z.object({
+  mode: z.enum(['incremental', 'full']),
+})
+
 export const previewRequestSchema = z.object({
   sessionId: z.string().min(1).max(200),
   seq: z.number().int().nonnegative(),
@@ -58,16 +73,15 @@ export const previewRequestSchema = z.object({
   after: z.number().int().min(0).max(50).optional(),
 })
 
-function fail(code: string, message: string): RpcResult<unknown> {
-  return { ok: false, code, message }
+function fail(message: string): RpcResult<unknown> {
+  return { ok: false, error: { code: 'bad-request', message, details: {} } }
 }
 
-function validate<T>(schema: z.ZodType<T>, input: unknown): T | { code: string; message: string } {
+function validate<T>(schema: z.ZodType<T>, input: unknown): T | { message: string } {
   const parsed = schema.safeParse(input)
   if (parsed.success) return parsed.data
   const first = parsed.error.issues[0]
   return {
-    code: 'invalid-request',
     message: first ? (first.path.join('.') || 'request') + ': ' + first.message : 'invalid request',
   }
 }
@@ -81,32 +95,42 @@ function validate<T>(schema: z.ZodType<T>, input: unknown): T | { code: string; 
 export async function dispatch(
   handlers: ExplorerRpc,
   method: string,
-  args: unknown,
+  rawArgs: unknown,
 ): Promise<RpcResult<unknown>> {
+  // payload 缺失/undefined 统一归一化为空对象（引擎可能丢字段）
+  const args = rawArgs === undefined || rawArgs === null ? {} : rawArgs
   switch (method) {
     case 'search': {
       const parsed = validate(searchRequestSchema, args)
-      if (!('query' in parsed)) return fail(parsed.code, parsed.message)
+      if (!('query' in parsed)) return fail(parsed.message)
       return toResult(() => handlers.search(parsed as SearchRequest))
     }
     case 'timeline': {
       const parsed = validate(timelineRequestSchema, args ?? {})
-      if ('code' in parsed) return fail(parsed.code, parsed.message)
+      if ('message' in parsed) return fail(parsed.message)
       return toResult(() => handlers.timeline(parsed as TimelineRequest | undefined))
     }
     case 'preview': {
       const parsed = validate(previewRequestSchema, args)
-      if (!('sessionId' in parsed)) return fail(parsed.code, parsed.message)
+      if (!('sessionId' in parsed)) return fail(parsed.message)
       return toResult(() => handlers.preview(parsed as PreviewRequest))
     }
     case 'indexStatus': {
       return toResult(() => handlers.indexStatus())
     }
+    case 'sync': {
+      return toResult(() => handlers.sync())
+    }
+    case 'healthCheck': {
+      return toResult(() => handlers.healthCheck())
+    }
     case 'rebuild': {
-      return toResult(() => handlers.rebuild())
+      const parsed = validate(rebuildRequestSchema, args ?? {})
+      if ('message' in parsed) return fail(parsed.message)
+      return toResult(() => handlers.rebuild(parsed as RebuildRequest))
     }
     default:
-      return fail('unknown-method', 'unknown method: ' + method)
+      return fail('unknown method: ' + method)
   }
 }
 

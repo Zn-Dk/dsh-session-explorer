@@ -11,9 +11,10 @@ import { join, dirname } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { SessionIndex, type SessionMeta } from './indexer.js'
+import { fingerprintOf } from './indexer.js'
 import { foldSession, foldTitle } from './transcript.js'
 import { dispatch } from './rpc.js'
-import type { ExplorerRpc, IndexStatus, RebuildResponse } from './protocol.js'
+import type { ExplorerRpc, IndexHealth, IndexStatus, RebuildRequest, RebuildResponse, SyncResponse } from './protocol.js'
 
 export const name = 'dsh-session-explorer'
 
@@ -45,6 +46,19 @@ interface PersistenceLike {
   listSnapshots?: () => Promise<Array<{ header: SessionHeaderLike; revision?: unknown }>>
   list?: () => Promise<SessionHeaderLike[]>
   inspect?: (id: string) => Promise<{ meta: SessionHeaderLike; events: SessionEventLike[] }>
+}
+
+/** sessionId → revision 映射（listSnapshots 轻量快照，O(1) 不读日志）。 */
+async function listSnapshotRevisions(persistence: PersistenceLike): Promise<Map<string, string> | null> {
+  if (!persistence.listSnapshots) return null
+  const snapshots = await persistence.listSnapshots()
+  const map = new Map<string, string>()
+  for (const snapshot of snapshots) {
+    const id = sessionIdOf(snapshot.header?.id)
+    const rev = typeof snapshot.revision === 'string' ? snapshot.revision : String(snapshot.revision ?? '')
+    if (id && rev) map.set(id, rev)
+  }
+  return map
 }
 
 interface SessionsLike {
@@ -84,7 +98,7 @@ interface CtxLike {
 const sessionIdOf = (id: unknown): string | null => (typeof id === 'string' && id.length > 0 ? id : null)
 
 /** 同步一个会话的最新日志。 */
-async function syncSession(index: SessionIndex, persistence: PersistenceLike, sessionId: string): Promise<boolean> {
+async function syncSession(index: SessionIndex, persistence: PersistenceLike, sessionId: string, revision?: string | null): Promise<boolean> {
   const inspection = await persistence.inspect!(sessionId)
   if (!inspection) return false
   const events = (inspection.events ?? []) as SessionEventLike[]
@@ -96,6 +110,8 @@ async function syncSession(index: SessionIndex, persistence: PersistenceLike, se
     cwd: typeof inspection.meta?.cwd === 'string' ? inspection.meta.cwd : null,
     createdAt: typeof inspection.meta?.createdAt === 'number' ? inspection.meta.createdAt : 0,
     updatedAt: Date.now(),
+    logFingerprint: fingerprintOf(folded.messages),
+    logRevision: revision ?? null,
   }
   index.upsertSession(meta, folded.messages)
   return true
@@ -138,12 +154,46 @@ export function apply(ctx: CtxLike) {
   }
 
   const persistence = ctx.get('sessionPersistence') as PersistenceLike | undefined
+  const agentsOf = () => (ctx.get('agents') as AgentsLike | undefined)?.roots?.() ?? []
 
   try {
     index = SessionIndex.open(indexPath())
   } catch (error) {
     ctx.logger?.warn?.('[dsh-session-explorer] index unavailable: ' + errorOf(error))
     index = null
+  }
+
+  // 面板打开时同步：live 会话 + 从未索引的新会话（串行，量小安全）。
+  const syncNow = async (): Promise<SyncResponse> => {
+    if (!persistence?.inspect) return { synced: 0, failed: 0 }
+    const targets = new Set<string>()
+    for (const agent of agentsOf()) {
+      const id = sessionIdOf(agent.session?.id)
+      if (id !== null) targets.add(id)
+    }
+    try {
+      for (const id of await listSessionIds(persistence)) {
+        const snap = index?.sessionMeta(id)
+        if (!snap || snap.indexedAt === 0) targets.add(id)
+      }
+    } catch (error) {
+      warnOnce('sync-list', 'sync session listing failed: ' + errorOf(error))
+    }
+    let synced = 0
+    let failed = 0
+    const revisions = await listSnapshotRevisions(persistence)
+    for (const id of targets) {
+      try {
+        await syncSession(index!, persistence, id, revisions?.get(id) ?? null)
+        synced++
+      } catch (error) {
+        failed++
+        const message = errorOf(error)
+        warnOnce('sync-' + id, 'sync failed for ' + id + ': ' + message)
+        try { index?.markFailed(id, message) } catch { /* 记录失败尽力而为 */ }
+      }
+    }
+    return { synced, failed }
   }
 
   const handlers: ExplorerRpc = {
@@ -164,25 +214,107 @@ export function apply(ctx: CtxLike) {
       const ids = persistence ? await listSessionIds(persistence) : []
       return index.indexStatus(ids)
     },
-    rebuild: async (): Promise<RebuildResponse> => {
+    sync: async (): Promise<SyncResponse> => {
+      if (!index) throw new Error('index unavailable')
+      return syncNow()
+    },
+    healthCheck: async (): Promise<IndexHealth> => {
+      if (!index) throw new Error('index unavailable')
+      return index.healthCheck()
+    },
+    rebuild: async (request: RebuildRequest): Promise<RebuildResponse> => {
       if (!index) throw new Error('index unavailable')
       if (!persistence?.inspect) {
         throw new Error('sessionPersistence.inspect is not available in this build')
       }
       const ids = await listSessionIds(persistence)
       const failures: RebuildResponse['failures'] = []
+      const mode = request.mode
+      let added = 0
+      let removed = 0
+      let refreshed = 0
+      let skipped = 0
       let succeeded = 0
       let failed = 0
-      for (const id of ids) {
+
+      const rebuildOne = async (id: string, revision?: string | null): Promise<void> => {
         try {
-          if (await syncSession(index, persistence, id)) succeeded++
+          if (await syncSession(index!, persistence, id, revision)) succeeded++
           else failed++
         } catch (error) {
           failed++
-          failures.push({ sessionId: id, indexed: false, error: errorOf(error) })
+          const message = errorOf(error)
+          failures.push({ sessionId: id, indexed: false, error: message })
+          try { index!.markFailed(id, message) } catch { /* 记录失败尽力而为 */ }
         }
       }
-      return { total: ids.length, succeeded, failed, failures }
+
+      if (mode === 'full') {
+        // 全量：清库后逐会话重建（严格串行，一次只驻留一个会话内存，防 OOM）
+        index.reset()
+        const revisions = await listSnapshotRevisions(persistence)
+        for (const id of ids) {
+          if (disposed) break
+          await rebuildOne(id, revisions?.get(id) ?? null)
+        }
+        added = succeeded
+      } else {
+        // 增量：revision 快速 diff（O(1)）+ 幽灵清理 + 变化会话重刷（严格串行）
+        const known = new Set(ids)
+        const revisions = await listSnapshotRevisions(persistence)
+        const storedRevisions = index.listRevisions()
+        const storedFingerprints = index.listFingerprints()
+        // 1) 幽灵：索引有但磁盘无 → 删除
+        for (const id of storedRevisions.keys()) {
+          if (!known.has(id)) {
+            try {
+              index.deleteSession(id)
+              removed++
+            } catch (error) {
+              failures.push({ sessionId: id, indexed: false, error: 'ghost delete failed: ' + errorOf(error) })
+            }
+          }
+        }
+        // 2) 逐会话：revision 相同 → 跳过（不 inspect）；不同/缺失 → 重刷
+        for (const id of ids) {
+          if (disposed) break
+          const currentRev = revisions?.get(id) ?? null
+          const storedRev = storedRevisions.get(id)
+          const storedFp = storedFingerprints.get(id)
+          // 已索引过，且有 revision 且与当前一致 → 直接跳过（快速路径）
+          if (storedRev !== undefined && storedRev !== null && currentRev !== null && storedRev === currentRev) {
+            skipped++
+            continue
+          }
+          // 其余情况：未索引 / revision 变化 / revision 缺失（老库）→ 重刷
+          try {
+            const inspection = await persistence.inspect!(id)
+            const events = (inspection.events ?? []) as SessionEventLike[]
+            const folded = foldSession(id, events as never[])
+            const title = foldTitle(events as never[])
+            const currentFp = fingerprintOf(folded.messages)
+            const meta: SessionMeta = {
+              sessionId: id,
+              title,
+              cwd: typeof inspection.meta?.cwd === 'string' ? inspection.meta.cwd : null,
+              createdAt: typeof inspection.meta?.createdAt === 'number' ? inspection.meta.createdAt : 0,
+              updatedAt: Date.now(),
+              logFingerprint: currentFp,
+              logRevision: currentRev,
+            }
+            index!.upsertSession(meta, folded.messages)
+            if (storedRev === undefined || storedFp === undefined) added++
+            else refreshed++
+            succeeded++
+          } catch (error) {
+            failed++
+            const message = errorOf(error)
+            failures.push({ sessionId: id, indexed: false, error: message })
+            try { index!.markFailed(id, message) } catch { /* 尽力而为 */ }
+          }
+        }
+      }
+      return { mode, total: ids.length, added, removed, refreshed, skipped, succeeded, failed, failures }
     },
   }
 
@@ -206,8 +338,12 @@ export function apply(ctx: CtxLike) {
     const id = sessionIdOf(agent.session?.id)
     if (!id) return
     agentCtx.effect(() => {
-      const stop = agentCtx.on!('agent/turn-stopping', onTurnStopping)
-      return () => stop()
+      const stopTurn = agentCtx.on!('agent/turn-stopping', onTurnStopping)
+      const stopStatus = agentCtx.on!('agent/status', onTurnStopping)
+      return () => {
+        stopTurn()
+        stopStatus()
+      }
     }, 'dsh-session-explorer.turn(' + id + ')')
   }
 

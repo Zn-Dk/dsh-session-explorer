@@ -98,7 +98,17 @@ export interface ExplorerRpc {
   timeline(request?: TimelineRequest): Promise<TimelineNode[]>
   preview(request: PreviewRequest): Promise<PreviewPage | null>
   indexStatus(): Promise<IndexStatus>
-  rebuild(): Promise<RebuildResponse>
+  /** 打开面板时触发一次轻量同步（live 会话 + 未索引新会话）。 */
+  sync(): Promise<SyncResponse>
+  /** 索引库健康检查（dialog 展示用）。 */
+  healthCheck(): Promise<IndexHealth>
+  rebuild(request: RebuildRequest): Promise<RebuildResponse>
+}
+
+/** 轻量同步结果。 */
+export interface SyncResponse {
+  synced: number
+  failed: number
 }
 
 /** 时间线请求。 */
@@ -123,10 +133,33 @@ export interface SessionIndexOutcome {
   error?: string
 }
 
+/** 重建模式。 */
+export type RebuildMode = 'incremental' | 'full'
+
+/** 重建请求。 */
+export interface RebuildRequest {
+  mode: RebuildMode
+}
+
 /** 重建响应。 */
 export interface RebuildResponse {
+  mode: RebuildMode
   total: number
+  /** 新建的索引（stale 会话）。 */
+  added: number
+  /** 删除的索引（幽灵会话）。 */
+  removed: number
+  /** 内容变化后重刷的会话。 */
+  refreshed: number
+  /** 指纹一致被跳过的会话。 */
+  skipped: number
   succeeded: number
   failed: number
   failures: SessionIndexOutcome[]
+}
+
+/** 索引库健康状态（dialog 展示）。 */
+export interface IndexHealth {
+  healthy: boolean
+  problems: string[]
 }
