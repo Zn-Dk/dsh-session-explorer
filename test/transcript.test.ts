@@ -11,7 +11,7 @@ function event(type: string, seq: number, data: unknown = {}, extra: Record<stri
 test('folds user/assistant/tool messages with turn tracking', () => {
   const events = [
     event('turn/start', 1, { turn: 1 }),
-    event('user/message', 2, { message: { source: { kind: 'user' }, content: text('帮我重构 indexer') } }),
+    event('user/message', 2, { source: { kind: 'user' }, content: text('帮我重构 indexer') }),
     event('assistant/message', 3, { turn: 1, step: 0, message: { source: { kind: 'model' }, content: text('好的，先看文件。') } }),
     event('tool/call', 4, { turn: 1, step: 0, callId: 'c1', name: 'run_code', arguments: '{"x":1}' }),
     event('tool/result', 5, { turn: 1, step: 0, message: { source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1' }] } }),
@@ -34,10 +34,23 @@ test('folds user/assistant/tool messages with turn tracking', () => {
 
 test('classifies plugin-injected user messages as steering', () => {
   const events = [
-    event('user/message', 1, { message: { source: { kind: 'plugin', plugin: 'goal' }, content: text('goal continuation') } }),
+    event('user/message', 1, { source: { kind: 'plugin', plugin: 'goal' }, content: text('goal continuation') }),
   ]
   const result = foldSession('s1', events)
   assert.equal(result.messages[0].kind, 'steering')
+  assert.equal(result.messages[0].textMain, 'goal continuation')
+})
+
+test('classifies non-user sources (skill-catalog/skill-invocation) as steering with text', () => {
+  const events = [
+    event('user/message', 1, { source: { kind: 'skill-catalog' }, content: text('available skills…') }),
+    event('user/message', 2, { source: { kind: 'skill-invocation' }, content: text('skill invoked') }),
+    event('user/message', 3, { source: { kind: 'user' }, content: text('真实用户输入') }),
+  ]
+  const result = foldSession('s1', events)
+  assert.deepEqual(result.messages.map((m) => m.kind), ['steering', 'steering', 'user'])
+  assert.equal(result.messages[0].textMain, 'available skills…')
+  assert.equal(result.messages[2].textMain, '真实用户输入')
 })
 
 test('compaction summary becomes a steering entry', () => {
@@ -86,7 +99,7 @@ test('chunks, boundaries and log-only events produce no entries', () => {
 test('turn carries over when user/message lacks its own turn', () => {
   const events = [
     event('turn/start', 1, { turn: 3 }),
-    event('user/message', 2, { message: { source: { kind: 'user' }, content: text('hi') } }),
+    event('user/message', 2, { source: { kind: 'user' }, content: text('hi') }),
   ]
   const result = foldSession('s1', events)
   assert.equal(result.messages[0].turn, 3)
@@ -94,7 +107,7 @@ test('turn carries over when user/message lacks its own turn', () => {
 
 test('missing seq events are skipped', () => {
   const events = [
-    event('user/message', 1, { message: { source: { kind: 'user' }, content: text('a') } }),
+    event('user/message', 1, { source: { kind: 'user' }, content: text('a') }),
     { type: 'assistant/message', time: 123, data: { turn: 1, message: { source: { kind: 'model' }, content: text('no seq') } } },
   ]
   const result = foldSession('s1', events)
@@ -126,14 +139,14 @@ test('makeSnippet highlights match with ellipses', () => {
 test('foldTitle returns the latest session/title', () => {
   const events = [
     event('session/title', 1, { title: '第一个标题' }),
-    event('user/message', 2, { message: { source: { kind: 'user' }, content: text('hi') } }),
+    event('user/message', 2, { source: { kind: 'user' }, content: text('hi') }),
     event('session/title', 3, { title: '最终标题' }),
   ]
   assert.equal(foldTitle(events), '最终标题')
 })
 
 test('foldTitle returns null without title events', () => {
-  assert.equal(foldTitle([event('user/message', 1, { message: { source: { kind: 'user' }, content: text('hi') } })]), null)
+  assert.equal(foldTitle([event('user/message', 1, { source: { kind: 'user' }, content: text('hi') })]), null)
 })
 
 test('makeSnippet returns plain prefix when no match', () => {

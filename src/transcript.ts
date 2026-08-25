@@ -28,6 +28,16 @@ interface RawEvent {
     error?: { name?: string; code?: string }
     summary?: unknown
     shadowedRange?: { start: number; end: number }
+    /** user/message 的 message 内容在 data 顶层（source/content/role）。 */
+    role?: string
+    source?: { kind?: string; plugin?: string }
+    content?: Array<{
+      type?: string
+      text?: string
+      toolCallId?: string
+      isError?: boolean
+    }>
+    /** assistant/message 与 tool/result 的 message 包裹在 data.message 内。 */
     message?: {
       role?: string
       source?: { kind?: string; plugin?: string }
@@ -110,9 +120,13 @@ export function foldSession(sessionId: string, events: RawEvent[]): FoldResult {
     let textTool = ''
 
     if (type === 'user/message') {
-      const sourceKind = data.message?.source?.kind
-      kind = sourceKind === 'plugin' ? 'steering' : 'user'
-      textMain = textOf(data.message?.content)
+      // user/message 的 message 就在 data 顶层（data.source / data.content），不是 data.message。
+      // 分类语义（对齐 harness ui-conversation message.ts）：
+      //   source.kind === 'user' → 用户消息；
+      //   其余（plugin / skill-catalog / skill-invocation / …）→ 系统注入（steering）。
+      const sourceKind = data.source?.kind
+      kind = sourceKind === 'user' ? 'user' : 'steering'
+      textMain = textOf(data.content)
     } else if (type === 'assistant/message') {
       kind = 'assistant'
       textMain = textOf(data.message?.content)
