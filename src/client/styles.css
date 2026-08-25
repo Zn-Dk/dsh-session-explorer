@@ -105,18 +105,23 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
   border-color: var(--dsw-alias-border-l3, #c7d2fe);
 }
 
-.sex-close {
+.sex-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: none;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, #888);
+  color: var(--dsw-alias-label-secondary, #555);
   cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 2px 8px;
-  border-radius: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
-.sex-close:hover {
+.sex-back:hover {
   color: var(--dsw-alias-label-primary, #1a1a1a);
   background: var(--dsw-specific-sidebar-nav-item-hover, rgba(0,0,0,.04));
 }

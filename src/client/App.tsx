@@ -137,6 +137,10 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
   return (
     <div className="sex-app">
       <div className="sex-header">
+        <button type="button" className="sex-back" aria-label="返回会话" onClick={onClose}>
+          <span aria-hidden="true">‹</span>
+          <span>返回会话</span>
+        </button>
         <div className="sex-tabs">
           <button
             type="button"
@@ -179,7 +183,6 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
           <button type="button" className="sex-mini-btn" disabled={rebuilding} onClick={openRebuildDialog}>
             {rebuilding ? '重建中…' : '重建索引'}
           </button>
-          <button type="button" className="sex-close" aria-label="关闭" onClick={onClose}>×</button>
         </div>
       </div>
       {rebuildResult && <div className="sex-notice">{rebuildResult}</div>}

@@ -199,8 +199,16 @@ function mountPanel(
   const waitObserver = new MutationObserver(() => { ensure() })
   waitObserver.observe(document.body, { childList: true, subtree: true })
 
+  // 兄弟面板只认识 'ssh' / 'taskboard' 两个 detail（mnemon 也是通过发这两个兼容
+  // 事件来关它们）。本面板打开时：先发兼容事件关掉 ssh/taskboard/mnemon（带抑制旗标
+  // 防止它们反过来关我们），再删它们的 html active attr，最后设自己的 active attr。
+  let suppressCompatibilityClose = false
   const applyActive = (): void => {
     if (store.getSnapshot().open) {
+      suppressCompatibilityClose = true
+      document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'ssh' }))
+      document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'taskboard' }))
+      suppressCompatibilityClose = false
       for (const attr of OTHER_ACTIVE_ATTRS) document.documentElement.removeAttribute(attr)
       document.documentElement.setAttribute(ACTIVE_ATTR, '')
       document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: PANEL_NAME }))
@@ -209,9 +217,10 @@ function mountPanel(
     }
   }
   const onOtherActivate = (event: Event): void => {
+    if (suppressCompatibilityClose || !store.getSnapshot().open) return
     const detail = (event as CustomEvent<string>).detail
     if (detail === 'taskboard' || detail === 'ssh' || detail === 'mnemon' || detail === 'session-archive') {
-      if (store.getSnapshot().open) store.close()
+      store.close()
     }
   }
   const SIDEBAR_ROW_SELECTOR = '[class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"], [class*="newSession"]'
