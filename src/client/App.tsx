@@ -137,10 +137,6 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
   return (
     <div className="sex-app">
       <div className="sex-header">
-        <button type="button" className="sex-back" aria-label="返回会话" onClick={onClose}>
-          <span aria-hidden="true">‹</span>
-          <span>返回会话</span>
-        </button>
         <div className="sex-tabs">
           <button
             type="button"
@@ -160,6 +156,10 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
           </button> */}
         </div>
         <div className="sex-header-right">
+          <button type="button" className="sex-back" aria-label="返回会话" onClick={onClose}>
+            <span aria-hidden="true">‹</span>
+            <span>返回会话</span>
+          </button>
           {indexStatus && (
             <span className={'sex-status' + (indexStatus.staleSessions > 0 ? ' sex-status-stale' : '')}>
               已索引 {indexStatus.indexedSessions}/{indexStatus.totalSessions} 会话
