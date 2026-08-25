@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-explorer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DSH Web 出树插件：会话消息级全文检索与时间线可视化浏览器。检索具体到某一条消息（正文/工具名/参数/错误摘要），时间线画布浏览全部会话，只读上下文预览。",
   "type": "module",
   "main": "lib/index.js",

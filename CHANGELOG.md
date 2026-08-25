@@ -2,6 +2,14 @@
 
 本项目的所有显著变更都记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-08-24
+
+### 修复
+- user/message 消息字段位置修正：内容改从 data 顶层读取（data.source / data.content），不再从 data.message 读取；分类语义对齐引擎：source.kind === 'user' → 用户消息，其余来源（plugin / skill-catalog / skill-invocation 等）统一归为系统注入（steering）。
+- 搜索结果自动去重：按 (seq, kind, text_main) GROUP BY 去重，修复 fork/续接会话共享父历史导致同一条消息在多个会话重复出现。
+- 只读预览：焦点消息渲染后自动滚动定位（scrollIntoView 居中），修复预览打开时焦点消息不在可视区内。
+- 面板互斥：本面板打开时主动关闭兄弟面板（ssh / taskboard / mnemon 等，对齐兼容事件 + suppress 旗标防回关）；面板右上角 × 关闭按钮改为「返回会话」按钮。
+
 ## [0.2.0] - 2026-08-24
 
 ### 新增
