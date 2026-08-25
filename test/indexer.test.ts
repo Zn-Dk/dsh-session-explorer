@@ -96,6 +96,29 @@ test('re-indexing a session replaces rows instead of duplicating', () => {
   }
 })
 
+test('search deduplicates identical messages across fork/continuation sessions', () => {
+  const index = SessionIndex.open(tmpDb())
+  try {
+    // fork 会话共享父历史：同一条消息（相同 seq+kind+text_main）在多个 session 各存一份
+    const shared = { seq: 1, kind: 'user' as const, time: 1_700_000_000_000, turn: 1, textMain: 'listSnapshots 检索', textTool: '' }
+    index.upsertSession(meta({ sessionId: 'parent', title: '父会话' }), [{ ...shared, sessionId: 'parent' }])
+    index.upsertSession(meta({ sessionId: 'fork-a', title: '分支 A' }), [{ ...shared, sessionId: 'fork-a' }])
+    index.upsertSession(meta({ sessionId: 'fork-b', title: '分支 B' }), [{ ...shared, sessionId: 'fork-b' }])
+    // 不同内容不参与去重
+    index.upsertSession(meta({ sessionId: 'other', title: '其他' }), [{ ...shared, sessionId: 'other', seq: 2, textMain: 'listSnapshots 另一条' }])
+
+    const res = index.search('listSnapshots', { limit: 10 })
+    // 去重后只剩 2 条：共享父消息 1 条 + 另一条
+    assert.equal(res.items.length, 2)
+    // 共享父消息保留标题非空的 session（parent/fork-a/fork-b 都非空，按 indexed_at 最晚优先）
+    const deduped = res.items.find((m) => m.seq === 1)
+    assert.ok(deduped !== undefined)
+    assert.ok(['parent', 'fork-a', 'fork-b'].includes(deduped.sessionId))
+  } finally {
+    index.close()
+  }
+})
+
 test('search filters by kind, time range and cwd', () => {
   const index = SessionIndex.open(tmpDb())
   try {
@@ -108,13 +131,15 @@ test('search filters by kind, time range and cwd', () => {
     ])
 
     const byKind = index.search('alpha', { kinds: ['user'], limit: 10 })
-    assert.deepEqual(byKind.items.map((m) => m.sessionId + ':' + m.seq), ['s1:1', 's2:1'])
+    // 去重排序：indexed_at DESC（s2 后索引）→ time DESC（s2 时间更晚）
+    assert.deepEqual(byKind.items.map((m) => m.sessionId + ':' + m.seq), ['s2:1', 's1:1'])
 
     const byTime = index.search('alpha', { from: 1_400, to: 1_600, limit: 10 })
     assert.deepEqual(byTime.items.map((m) => m.sessionId + ':' + m.seq), ['s2:1'])
 
     const byCwd = index.search('alpha', { cwd: '/root/proj/demo', limit: 10 })
-    assert.deepEqual(byCwd.items.map((m) => m.sessionId + ':' + m.seq), ['s1:1', 's1:2'])
+    // 时间倒序：s1:2 (2000) 先于 s1:1 (1000)
+    assert.deepEqual(byCwd.items.map((m) => m.sessionId + ':' + m.seq), ['s1:2', 's1:1'])
   } finally {
     index.close()
   }

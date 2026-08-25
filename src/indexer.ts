@@ -284,6 +284,12 @@ export class SessionIndex {
       params.push(options.cwd)
     }
 
+    // 去重：DSH fork/续接会话共享父历史，同一条消息（相同 seq+kind+正文）会在
+    // 多个 session 各存一份。用 GROUP BY (seq, kind, text_main) 保留每组一行；
+    // SQLite bare-column 特性会保留每组第一行，配合 ORDER BY 优先留标题非空、
+    // indexed_at 更晚的 session（fork 后的会话通常更有意义）。
+    // 注意：bm25 不能出现在窗口函数子查询内，故 GROUP BY 必须与 bm25 同层，
+    // 去重顺序由 ORDER BY 的 title/indexed_at 前缀保证。
     const rows = (short
       ? this.db.prepare(`SELECT
           m.session_id, m.seq, m.kind, m.time, m.turn,
@@ -293,18 +299,20 @@ export class SessionIndex {
         FROM messages m
         LEFT JOIN sessions s ON s.session_id = m.session_id
         WHERE ${where.join(' AND ')}
-        ORDER BY m.time DESC
+        GROUP BY m.seq, m.kind, m.text_main
+        ORDER BY s.indexed_at DESC, m.time DESC
         LIMIT ? OFFSET ?`).all(...params, limit + 1, offset)
       : this.db.prepare(`SELECT
           m.session_id, m.seq, m.kind, m.time, m.turn,
           m.text_main, m.text_tool,
           s.title, s.cwd,
-          ${RANK} AS rank
+          0 AS rank
         FROM messages_fts f
         JOIN messages m ON m.rowid = f.rowid
         LEFT JOIN sessions s ON s.session_id = m.session_id
         WHERE ${where.join(' AND ')}
-        ORDER BY rank, m.time DESC
+        GROUP BY m.seq, m.kind, m.text_main
+        ORDER BY s.indexed_at DESC, m.time DESC
         LIMIT ? OFFSET ?`).all(...params, limit + 1, offset)) as Array<Record<string, unknown>>
 
     const hasMore = rows.length > limit
