@@ -15,7 +15,7 @@ Out-of-tree DSH Web plugin: message-level full-text search across sessions. Sear
 - **只读预览** — 命中消息 + 前后上下文窗口，焦点消息自动滚动定位到可视区中央，可一键在真实会话中打开。
   **Read-only preview** — focused hit plus a surrounding context window; the focus message auto-scrolls to the center of the viewport, and one click opens it in the real session.
 - **会话浏览器入口** — 侧栏工具区入口按钮 + conversation 列内覆盖面板（不遮挡全局）；面板左上角「返回会话」按钮关闭并回到会话。
-  **Session browser entry** — sidebar tool entry + an overlay panel inside the conversation column (no global overlay); the top-left "返回会话" (back to session) button closes the panel.
+  **Session browser entry** — sidebar tool entry + an overlay panel inside the conversation column (no global overlay); the top-left "back to session" button closes the panel.
 - **国际化（i18n）** — 中英双语全覆盖（面板/对话框/搜索/预览），语言跟随 DSH Host locale 服务（设置页 General 切换即时生效），无手动设置项。
   **i18n** — full zh/en coverage (panel / dialogs / search / preview); language follows the DSH Host locale service (instant switch in Settings → General), no manual setting needed.
 - **重建索引（增量/全量 + 健康检查）** — 增量模式用 engine revision token 快速 diff（O(1) 跳过未变会话）+ 内容指纹重刷变化会话 + 清理幽灵会话；全量模式清库逐会话重建。打开重建对话框时自动执行索引库健康检查（integrity + 关键表可读性）并推荐模式。
@@ -27,13 +27,15 @@ Out-of-tree DSH Web plugin: message-level full-text search across sessions. Sear
 
 从 npm 安装（推荐）：
 
+Install from npm (recommended):
+
 ```sh
 dsh plugin --profile web add dsh-session-explorer
 ```
 
-包页面：[https://www.npmjs.com/package/dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)
+包页面 / Package page: [https://www.npmjs.com/package/dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)
 
-本地构建安装：
+本地构建安装 / Build from source:
 
 ```sh
 pnpm install
@@ -43,28 +45,33 @@ dsh plugin --profile web add ./dsh-session-explorer-*.tgz
 
 安装后重启 `dsh web`，侧栏工具区出现「会话浏览器」入口。索引库位于 `~/.dsh/storages/session-explorer.sqlite`（首次使用自动创建并索引）。
 
+After installation, restart `dsh web`; the "Session Explorer" entry appears in the sidebar tool area. The index lives at `~/.dsh/storages/session-explorer.sqlite` (auto-created and indexed on first use).
+
 ## 开发 / Development
 
 ```sh
 pnpm install
-pnpm test      # 41 个单元测试（需要 Node ≥ 22.5，依赖 node:sqlite）
+pnpm test      # 41 个单元测试（需要 Node ≥ 22.5，依赖 node:sqlite） / 41 unit tests (requires Node ≥ 22.5, uses node:sqlite)
 pnpm build     # tsc + rolldown client bundle
 ```
 
 ## 架构 / Architecture
 
-- `src/protocol.ts` —— RPC 契约类型（Host/Client 共享）
-- `src/transcript.ts` —— SessionEvent 日志 → 可索引消息条目的纯折叠层（零依赖、可单测）
-- `src/indexer.ts` —— SQLite FTS5 trigram 派生索引（host 侧，application_id + user_version 双校验、0600 权限）
-- `src/rpc.ts` —— RPC 校验与路由
-- `src/index.ts` —— host 装配（事件同步 + RPC + 启动对账）
-- `src/client/` —— 浏览器 bundle（侧栏入口 + 搜索/预览视图 + conversation 列内覆盖面板）
+- `src/protocol.ts` —— RPC 契约类型（Host/Client 共享）/ RPC contract types (shared Host/Client)
+- `src/transcript.ts` —— SessionEvent 日志 → 可索引消息条目的纯折叠层（零依赖、可单测）/ SessionEvent log → indexable message entries, pure fold layer (zero deps, unit-testable)
+- `src/indexer.ts` —— SQLite FTS5 trigram 派生索引（host 侧，application_id + user_version 双校验、0600 权限）/ SQLite FTS5 trigram derived index (host side, application_id + user_version dual check, 0600 perms)
+- `src/rpc.ts` —— RPC 校验与路由 / RPC validation and routing
+- `src/index.ts` —— host 装配（事件同步 + RPC + 启动对账）/ host assembly (event sync + RPC + startup reconciliation)
+- `src/client/` —— 浏览器 bundle（侧栏入口 + 搜索/预览视图 + conversation 列内覆盖面板）/ browser bundle (sidebar entry + search/preview views + conversation-column overlay panel)
 
 ## 已知限制 / Known limitations
 
 - 完整 tool result 正文全文检索留待 V2（当前仅工具名/参数/错误摘要进低权重字段）。
+  Full tool-result body full-text search is deferred to V2 (only tool name / args / error summary enter the low-weight field today).
 - 会话删除无引擎 API，索引删除仅支持插件自建库内清理。
+  Session deletion has no engine API; index cleanup only covers the plugin's own database.
 - 时间线画布（@xyflow/react）存在严重渲染 bug，0.2.0 起暂时隐藏入口，修复后恢复。
+  The timeline canvas (@xyflow/react) has a serious rendering bug; the entry is hidden since 0.2.0 and will return once fixed.
 
 ## License
 
