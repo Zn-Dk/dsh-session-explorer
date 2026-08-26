@@ -20,7 +20,8 @@
     "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "README.zh.md"
   ],
   "license": "MIT",
   "engines": {
