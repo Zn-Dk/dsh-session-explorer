@@ -2,6 +2,7 @@
 
 > 状态：研究完成（2026-08-27）｜结论：**纯插件不可行，需上游 harness 小补丁（Discussion 提案）**
 > 上游仓库不接受外部 PR/Issue，贡献通道 = GitHub Discussions（[CONTRIBUTING.md](https://github.com/deepseek-ai/deepseek-harness/blob/master/CONTRIBUTING.md)）。
+> **提案已发布**：[Discussion #4602](https://github.com/deepseek-ai/deepseek-harness/discussions/4602)（Ideas 分类，2026-08-27）
 
 ## 1. 目标
 
