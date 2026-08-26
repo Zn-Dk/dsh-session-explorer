@@ -14,8 +14,10 @@ Out-of-tree DSH Web plugin: message-level full-text search across sessions. Sear
   **Deduplicated results across fork/continued sessions** — fork/continuation sessions share parent history, so the same message is stored once per session; search groups by (seq, kind, text) and keeps the session with a non-empty title and the latest index time.
 - **只读预览** — 命中消息 + 前后上下文窗口，焦点消息自动滚动定位到可视区中央，可一键在真实会话中打开。
   **Read-only preview** — focused hit plus a surrounding context window; the focus message auto-scrolls to the center of the viewport, and one click opens it in the real session.
-- **会话浏览器入口** — 侧栏工具区入口按钮 + conversation 列内覆盖面板（不遮挡全局）；面板右上角「返回会话」按钮关闭并回到会话。
-  **Session browser entry** — sidebar tool entry + an overlay panel inside the conversation column (no global overlay); the top-right "返回会话" (back to session) button closes the panel.
+- **会话浏览器入口** — 侧栏工具区入口按钮 + conversation 列内覆盖面板（不遮挡全局）；面板左上角「返回会话」按钮关闭并回到会话。
+  **Session browser entry** — sidebar tool entry + an overlay panel inside the conversation column (no global overlay); the top-left "返回会话" (back to session) button closes the panel.
+- **国际化（i18n）** — 中英双语全覆盖（面板/对话框/搜索/预览），语言跟随 DSH Host locale 服务（设置页 General 切换即时生效），无手动设置项。
+  **i18n** — full zh/en coverage (panel / dialogs / search / preview); language follows the DSH Host locale service (instant switch in Settings → General), no manual setting needed.
 - **重建索引（增量/全量 + 健康检查）** — 增量模式用 engine revision token 快速 diff（O(1) 跳过未变会话）+ 内容指纹重刷变化会话 + 清理幽灵会话；全量模式清库逐会话重建。打开重建对话框时自动执行索引库健康检查（integrity + 关键表可读性）并推荐模式。
   **Rebuild (incremental / full + health check)** — incremental mode fast-diffs via engine revision tokens (O(1) skip), re-flushes changed sessions by content fingerprint and removes ghost sessions; full mode resets the database and rebuilds session by session. The rebuild dialog runs a health check (integrity + table readability) and recommends a mode.
 - **索引状态（损坏会话分类）** — 已索引 / 待同步 / 源日志损坏（无法索引）三态展示；打开面板时自动轻量同步（live 会话 + 未索引新会话），turn 结束增量同步，启动时对账。
