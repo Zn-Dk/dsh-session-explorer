@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { envelopeError, type ExplorerClient } from '../store.js'
 import type { MessageHit, MessageKind, SearchResponse } from '../../protocol.js'
+import { useI18n, type I18nKey } from '../i18n.js'
 
 export interface SearchViewProps {
   client: ExplorerClient
@@ -13,13 +14,15 @@ export interface SearchViewProps {
   onPreview: (hit: MessageHit) => void
   /** 打开会话（跳到真实会话）。 */
   onOpenSession: (sessionId: string) => void
+  /** DSH Host locale 服务（缺省回退 navigator.language）。 */
+  locale?: import('../i18n.js').LocaleServiceLike
 }
 
-const KIND_LABELS: Array<{ kind: MessageKind; label: string }> = [
-  { kind: 'user', label: '用户' },
-  { kind: 'assistant', label: '助手' },
-  { kind: 'tool', label: '工具' },
-  { kind: 'steering', label: '系统注入' },
+const KIND_KEYS: Array<{ kind: MessageKind; key: I18nKey }> = [
+  { kind: 'user', key: 'kindUser' },
+  { kind: 'assistant', key: 'kindAssistant' },
+  { kind: 'tool', key: 'kindTool' },
+  { kind: 'steering', key: 'kindSteering' },
 ]
 
 const KIND_COLORS: Record<MessageKind, string> = {
@@ -34,7 +37,8 @@ function formatTime(time: number): string {
   return date.toLocaleString()
 }
 
-export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps) {
+export function SearchView({ client, onPreview, onOpenSession, locale }: SearchViewProps) {
+  const { t } = useI18n(locale)
   const [query, setQuery] = useState('')
   const [kinds, setKinds] = useState<MessageKind[]>([])
   const [state, setState] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; items: MessageHit[]; nextOffset: number | null | undefined; error: string | null }>({ status: 'idle', items: [], nextOffset: undefined, error: null })
@@ -49,7 +53,7 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
       const res = await client.search({ query, kinds: kinds.length ? kinds : undefined, limit: 50, offset })
       if (controller.signal.aborted) return
       if (!res.ok) {
-        setState({ status: 'error', items: [], nextOffset: undefined, error: envelopeError(res) || 'search failed' })
+        setState({ status: 'error', items: [], nextOffset: undefined, error: envelopeError(res) || t('searchFailed') })
         return
       }
       const value = res.value ?? { items: [], nextOffset: undefined }
@@ -63,7 +67,7 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
       if (controller.signal.aborted) return
       setState({ status: 'error', items: [], nextOffset: undefined, error: String(error) })
     }
-  }, [client, query, kinds, state.items])
+  }, [client, query, kinds, state.items, t])
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -93,13 +97,13 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
         <input
           className="sex-input"
           type="search"
-          placeholder="搜索会话消息（正文 / 工具名 / 参数 / 错误摘要）…"
+          placeholder={t('searchPlaceholder')}
           value={query}
           onChange={(event) => { setQuery(event.target.value) }}
         />
       </div>
       <div className="sex-kind-row">
-        {KIND_LABELS.map(({ kind, label }) => (
+        {KIND_KEYS.map(({ kind, key }) => (
           <button
             key={kind}
             type="button"
@@ -107,23 +111,23 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
             onClick={() => { toggleKind(kind) }}
           >
             <span className="sex-kind-dot" style={{ background: KIND_COLORS[kind] }} />
-            {label}
+            {t(key)}
           </button>
         ))}
       </div>
-      {state.status === 'idle' && <div className="sex-empty">输入关键词开始检索</div>}
-      {state.status === 'loading' && <div className="sex-empty">检索中…</div>}
+      {state.status === 'idle' && <div className="sex-empty">{t('searchIdle')}</div>}
+      {state.status === 'loading' && <div className="sex-empty">{t('searchLoading')}</div>}
       {state.status === 'error' && <div className="sex-error">{state.error}</div>}
-      {state.status === 'ready' && state.items.length === 0 && <div className="sex-empty">没有匹配的消息</div>}
+      {state.status === 'ready' && state.items.length === 0 && <div className="sex-empty">{t('searchNoResult')}</div>}
       {state.items.length > 0 && (
         <div className="sex-results">
           {state.items.map((item) => (
             <div key={item.sessionId + ':' + item.seq} className="sex-hit" onClick={() => { onPreview(item) }}>
               <div className="sex-hit-head">
                 <span className="sex-hit-kind" style={{ color: KIND_COLORS[item.kind] }}>
-                  {KIND_LABELS.find((k) => k.kind === item.kind)?.label ?? item.kind}
+                  {KIND_KEYS.find((k) => k.kind === item.kind) ? t(KIND_KEYS.find((k) => k.kind === item.kind)!.key) : item.kind}
                 </span>
-                <span className="sex-hit-title">{item.sessionTitle ?? '(无标题)'}</span>
+                <span className="sex-hit-title">{item.sessionTitle ?? t('noTitle')}</span>
                 <span className="sex-hit-meta">{formatTime(item.time)}</span>
               </div>
               <div className="sex-hit-snippet">{item.snippet}</div>
@@ -137,7 +141,7 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
                     onOpenSession(item.sessionId)
                   }}
                 >
-                  打开会话
+                  {t('openSession')}
                 </button>
               </div>
             </div>
@@ -146,7 +150,7 @@ export function SearchView({ client, onPreview, onOpenSession }: SearchViewProps
       )}
       {state.nextOffset != null && (
         <div className="sex-more">
-          <button type="button" className="sex-mini-btn" onClick={loadMore}>加载更多</button>
+          <button type="button" className="sex-mini-btn" onClick={loadMore}>{t('loadMore')}</button>
         </div>
       )}
     </div>

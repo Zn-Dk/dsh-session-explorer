@@ -9,6 +9,7 @@ import { SearchView } from './views/SearchView.js'
 import { TimelineView } from './views/TimelineView.js'
 import { PreviewView } from './views/PreviewView.js'
 import type { IndexStatus, MessageHit, TimelineNode } from '../protocol.js'
+import { useI18n, type LocaleServiceLike } from './i18n.js'
 
 export interface AppProps {
   client: ExplorerClient
@@ -18,6 +19,8 @@ export interface AppProps {
   onClose: () => void
   /** DSH 平台 Tooltip 组件（由 bundle-entry 从 primitives seed 注入）。 */
   Tooltip?: unknown
+  /** DSH Host locale 服务（由 bundle-entry 注入；缺省回退 navigator.language）。 */
+  locale?: LocaleServiceLike
 }
 
 type View =
@@ -25,8 +28,9 @@ type View =
   | { name: 'timeline' }
   | { name: 'preview'; sessionId: string; seq: number }
 
-export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps) {
+export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: AppProps) {
   const panel = usePanelStore(store)
+  const { t } = useI18n(locale)
   const [view, setView] = useState<View>({ name: 'search' })
   const [timeline, setTimeline] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; nodes: TimelineNode[]; error: string | null }>({ status: 'idle', nodes: [], error: null })
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
@@ -75,24 +79,29 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
         const parts: string[] = []
         if (r) {
           if (mode === 'incremental') {
-            parts.push('新增 ' + (r.added ?? 0), '删除 ' + (r.removed ?? 0), '重刷 ' + (r.refreshed ?? 0), '跳过 ' + (r.skipped ?? 0))
+            parts.push(
+              t('addedCount', { n: r.added ?? 0 }),
+              t('removedCount', { n: r.removed ?? 0 }),
+              t('refreshedCount', { n: r.refreshed ?? 0 }),
+              t('skippedCount', { n: r.skipped ?? 0 }),
+            )
           }
-          parts.push('成功 ' + (r.succeeded ?? 0), '失败 ' + (r.failed ?? 0))
+          parts.push(t('succeededCount', { n: r.succeeded ?? 0 }), t('failedCount', { n: r.failed ?? 0 }))
           const firstFailure = r.failures?.[0]?.error
-          if (r.failed > 0) parts.push('首个失败：' + (firstFailure ?? '未知'))
+          if (r.failed > 0) parts.push(t('firstFailure', { msg: firstFailure ?? t('unknownError') }))
         }
-        setRebuildResult((mode === 'incremental' ? '增量重建完成：' : '全量重建完成：') + parts.join('，'))
+        setRebuildResult((mode === 'incremental' ? t('rebuildDoneIncremental') : t('rebuildDoneFull')) + parts.join(t('seqSep')))
       } else {
-        setRebuildResult('重建失败：' + (envelopeError(res) || '未知错误'))
+        setRebuildResult(t('rebuildFailed') + (envelopeError(res) || t('unknownError')))
       }
       await loadTimeline()
       await loadIndexStatus()
     } catch (error) {
-      setRebuildResult('重建失败：' + String(error))
+      setRebuildResult(t('rebuildFailed') + String(error))
     } finally {
       setRebuilding(false)
     }
-  }, [client, loadTimeline, loadIndexStatus])
+  }, [client, loadTimeline, loadIndexStatus, t])
 
   // 打开重建 dialog：先做健康检查
   const openRebuildDialog = useCallback(() => {
@@ -104,13 +113,13 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
           const health = res.value
           setRebuildDialog((d) => ({ ...d, checking: false, health, mode: health.healthy ? 'incremental' : 'full' }))
         } else {
-          setRebuildDialog((d) => ({ ...d, checking: false, health: { healthy: false, problems: [envelopeError(res) || '健康检查失败'] }, mode: 'full' }))
+          setRebuildDialog((d) => ({ ...d, checking: false, health: { healthy: false, problems: [envelopeError(res) || t('healthCheckFailed')] }, mode: 'full' }))
         }
       } catch (error) {
         setRebuildDialog((d) => ({ ...d, checking: false, health: { healthy: false, problems: [String(error)] }, mode: 'full' }))
       }
     })()
-  }, [client])
+  }, [client, t])
 
   const openTimeline = useCallback(() => {
     setView({ name: 'timeline' })
@@ -137,13 +146,17 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
   return (
     <div className="sex-app">
       <div className="sex-header">
+        <button type="button" className="sex-back" aria-label={t('backToSessionAria')} onClick={onClose}>
+          <span aria-hidden="true">‹</span>
+          <span>{t('backToSession')}</span>
+        </button>
         <div className="sex-tabs">
           <button
             type="button"
             className={'sex-tab' + (view.name === 'search' ? ' sex-tab-on' : '')}
             onClick={() => { setView({ name: 'search' }) }}
           >
-            消息检索
+            {t('searchTab')}
           </button>
           {/* 时间线入口暂时隐藏：@xyflow/react 画布存在严重渲染 bug，修复后恢复。
               保留 TimelineView 组件与路由，仅隐藏入口（view.name === 'timeline' 分支仍可被代码进入）。 */}
@@ -152,44 +165,40 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
             className={'sex-tab' + (view.name === 'timeline' ? ' sex-tab-on' : '')}
             onClick={openTimeline}
           >
-            时间线
+            {t('timelineTab')}
           </button> */}
         </div>
         <div className="sex-header-right">
-          <button type="button" className="sex-back" aria-label="返回会话" onClick={onClose}>
-            <span aria-hidden="true">‹</span>
-            <span>返回会话</span>
-          </button>
           {indexStatus && (
             <span className={'sex-status' + (indexStatus.staleSessions > 0 ? ' sex-status-stale' : '')}>
-              已索引 {indexStatus.indexedSessions}/{indexStatus.totalSessions} 会话
-              {indexStatus.staleSessions > 0 ? ' · ' + indexStatus.staleSessions + ' 个待同步，点击重建索引' : ''}
-              {indexStatus.failedSessions > 0 ? ' · ' + indexStatus.failedSessions + ' 个源日志损坏（无法索引）' : ''}
+              {t('indexedStatus', { indexed: indexStatus.indexedSessions, total: indexStatus.totalSessions })}
+              {indexStatus.staleSessions > 0 ? ' · ' + t('staleStatus', { n: indexStatus.staleSessions }) : ''}
+              {indexStatus.failedSessions > 0 ? ' · ' + t('failedStatus', { n: indexStatus.failedSessions }) : ''}
             </span>
           )}
           {Tooltip
             ? createElement(Tooltip as never, {
-                label: '重建索引：扫描全部历史会话并重建搜索索引。\n• 首次安装插件后自动触发，无需手动操作\n• 仅在索引库损坏、大批量新会话或怀疑索引不一致时使用\n• 日常搜索靠会话切换时的自动同步维护',
+                label: t('helpTooltip'),
                 side: 'bottom',
                 delayMs: 300,
                 maxWidth: 320,
-                children: createElement('span', { className: 'sex-help-icon', 'aria-label': '重建索引说明' }, '?'),
+                children: createElement('span', { className: 'sex-help-icon', 'aria-label': t('helpAria') }, '?'),
               })
             : createElement('span', {
                 className: 'sex-help-icon',
-                title: '重建索引说明',
-                'aria-label': '重建索引说明',
+                title: t('helpAria'),
+                'aria-label': t('helpAria'),
               }, '?')}
           <button type="button" className="sex-mini-btn" disabled={rebuilding} onClick={openRebuildDialog}>
-            {rebuilding ? '重建中…' : '重建索引'}
+            {rebuilding ? t('rebuildingBtn') : t('rebuildBtn')}
           </button>
         </div>
       </div>
       {rebuildResult && <div className="sex-notice">{rebuildResult}</div>}
       <div className="sex-body">
-        {view.name === 'search' && <SearchView client={client} onPreview={openPreviewFromHit} onOpenSession={onOpenSession} />}
+        {view.name === 'search' && <SearchView client={client} onPreview={openPreviewFromHit} onOpenSession={onOpenSession} locale={locale} />}
         {view.name === 'timeline' && (timeline.status === 'loading'
-          ? <div className="sex-empty">加载时间线…</div>
+          ? <div className="sex-empty">{t('loadingTimeline')}</div>
           : timeline.status === 'error'
             ? <div className="sex-error">{timeline.error}</div>
             : <TimelineView client={client} nodes={timeline.nodes} onPreview={openPreview} />)}
@@ -200,26 +209,27 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
             seq={view.seq}
             onBack={() => { setView({ name: 'search' }) }}
             onOpenSession={onOpenSession}
+            locale={locale}
           />
         )}
       </div>
       {rebuildDialog.open && (
         <div className="sex-modal-backdrop" onClick={() => { if (!rebuilding) setRebuildDialog((d) => ({ ...d, open: false })) }}>
           <div className="sex-modal" onClick={(event) => { event.stopPropagation() }}>
-            <div className="sex-modal-title">重建搜索索引</div>
+            <div className="sex-modal-title">{t('dialogTitle')}</div>
             {rebuildDialog.checking ? (
-              <div className="sex-modal-hint">正在检查索引库健康状态…</div>
+              <div className="sex-modal-hint">{t('checkingHealth')}</div>
             ) : (
               <>
                 {rebuildDialog.health && !rebuildDialog.health.healthy && (
                   <div className="sex-modal-warn">
-                    索引库健康检查未通过：
+                    {t('healthFailed')}
                     {rebuildDialog.health.problems.map((p) => <div key={p}>• {p}</div>)}
-                    <div>建议选择「全量重建」以修复。</div>
+                    <div>{t('healthFailedHint')}</div>
                   </div>
                 )}
                 {rebuildDialog.health?.healthy && (
-                  <div className="sex-modal-hint">索引库健康检查通过。</div>
+                  <div className="sex-modal-hint">{t('healthOk')}</div>
                 )}
                 <label className="sex-radio-row">
                   <input
@@ -230,8 +240,8 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
                     disabled={rebuilding}
                   />
                   <span>
-                    <strong>增量重建</strong>（推荐，较快）
-                    <span className="sex-modal-sub">仅新增未索引会话、清理已删除会话、重刷内容变化的会话；已索引且未变化的会话跳过。</span>
+                    <strong>{t('incrementalLabel')}</strong>{t('incrementalRecommended')}
+                    <span className="sex-modal-sub">{t('incrementalDesc')}</span>
                   </span>
                 </label>
                 <label className="sex-radio-row">
@@ -243,16 +253,16 @@ export function App({ client, store, onOpenSession, onClose, Tooltip }: AppProps
                     disabled={rebuilding}
                   />
                   <span>
-                    <strong>全量重建</strong>（较慢）
-                    <span className="sex-modal-sub">清空索引库并逐会话重建，可修复索引库损坏；历史会话多时可能需要较长时间。</span>
+                    <strong>{t('fullLabel')}</strong>{t('fullSlow')}
+                    <span className="sex-modal-sub">{t('fullDesc')}</span>
                   </span>
                 </label>
               </>
             )}
             <div className="sex-modal-footer">
-              <button type="button" className="sex-mini-btn" onClick={() => { setRebuildDialog((d) => ({ ...d, open: false })) }} disabled={rebuilding}>取消</button>
+              <button type="button" className="sex-mini-btn" onClick={() => { setRebuildDialog((d) => ({ ...d, open: false })) }} disabled={rebuilding}>{t('cancel')}</button>
               <button type="button" className="sex-mini-btn sex-primary-btn" disabled={rebuilding || rebuildDialog.checking} onClick={() => { void doRebuild(rebuildDialog.mode) }}>
-                {rebuilding ? '重建中…' : '开始重建'}
+                {rebuilding ? t('rebuildingBtn') : t('startRebuild')}
               </button>
             </div>
           </div>

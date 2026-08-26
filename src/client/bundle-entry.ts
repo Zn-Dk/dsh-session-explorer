@@ -47,6 +47,8 @@ interface ClientCtxLike {
   connection?: ConnectionLike
   sessions?: SessionsLike
   effect?: (dispose: () => unknown, label: string) => void
+  /** cordis client ctx：取注入的服务（locale 等）。 */
+  get?: (service: string) => unknown
 }
 
 // ── 侧栏入口 ────────────────────────────────────────────────
@@ -169,6 +171,7 @@ function mountPanel(
   onOpenSession: (id: string) => void,
   reactDomClient: { createRoot: (el: Element) => ReactRootLike },
   Tooltip?: unknown,
+  locale?: unknown,
 ): () => void {
   let root: ReactRootLike | undefined
   let container: HTMLDivElement | undefined
@@ -194,6 +197,7 @@ function mountPanel(
       onOpenSession,
       onClose: () => { store.close() },
       Tooltip,
+      locale,
     }))
   }
   const waitObserver = new MutationObserver(() => { ensure() })
@@ -256,6 +260,9 @@ export function factory(require: (spec: string) => unknown) {
     const reactDomClient = require('react-dom/client') as { createRoot: (el: Element) => ReactRootLike }
     const Tooltip = (require('@deepseek-ai/dsh-client-ui-primitives') as { Tooltip?: unknown })?.Tooltip
 
+    // DSH Host locale 服务（注入词 @deepseek-ai/dsh-client-locale；缺省回退 navigator.language）
+    const locale = ctx.get?.('locale') as { subscribe?: (fn: () => void) => () => void; getSnapshot?: () => { active: string; revision: number } } | undefined
+
     const client = createExplorerClient(ctx.connection, CHANNEL)
     const store = createPanelStore()
     const onOpenSession = (sessionId: string) => {
@@ -272,15 +279,25 @@ export function factory(require: (spec: string) => unknown) {
       document.head.appendChild(tag)
     }
 
-    const disposeEntry = mountSidebarEntry(store, '会话浏览器')
-    const disposePanel = mountPanel(client, store, onOpenSession, reactDomClient, Tooltip)
+    // 侧栏入口 label：跟随 locale（中文「会话浏览器」/ 英文「Session Explorer」）
+    const entryLabel = (): string => {
+      const active = locale?.getSnapshot?.()?.active
+      return typeof active === 'string' && active.length > 0 && !active.toLowerCase().startsWith('zh') ? 'Session Explorer' : '会话浏览器'
+    }
+    let disposeEntry = () => {}
+    const applyEntry = () => { disposeEntry(); disposeEntry = mountSidebarEntry(store, entryLabel()) }
+    applyEntry()
+    const unsubscribeLocale = locale?.subscribe?.(applyEntry)
+
+    const disposePanel = mountPanel(client, store, onOpenSession, reactDomClient, Tooltip, locale)
     ctx.effect?.(() => () => {
+      unsubscribeLocale?.()
       disposePanel()
       disposeEntry()
     }, 'dsh-session-explorer: sidebar workspace')
   }
 
   bundleModule.exports.apply = apply
-  bundleModule.exports.inject = ['connection', 'sessions']
+  bundleModule.exports.inject = ['connection', 'sessions', 'locale']
   return bundleModule.exports
 }
