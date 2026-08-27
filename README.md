@@ -59,6 +59,10 @@ pnpm build     # tsc + rolldown client bundle
 - Session deletion has no engine API; index cleanup only covers the plugin's own database.
 - The timeline canvas (@xyflow/react) has a serious rendering bug; the entry is hidden since 0.2.0 and will return once fixed.
 
+## Screenshots
+
+See the `assets/` directory for installation, search, and timeline overview screenshots, and `screenshots.json` for the curated list the dsh-market uses to render the marketplace card preview.
+
 ## Release & listing
 
 - npm package: [dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)

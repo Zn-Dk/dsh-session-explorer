@@ -59,6 +59,10 @@ pnpm build     # tsc + rolldown client bundle
 - 会话删除无引擎 API，索引删除仅支持插件自建库内清理。
 - 时间线画布（@xyflow/react）存在严重渲染 bug，0.2.0 起暂时隐藏入口，修复后恢复。
 
+## 截图
+
+`assets/` 目录保存安装、搜索、时间线总览等截图，`screenshots.json` 列出 dsh-market 渲染卡片预览时使用的图片清单。
+
 ## 发布与收录
 
 - npm 包：[dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)
