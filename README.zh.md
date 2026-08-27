@@ -58,6 +58,15 @@ pnpm build     # tsc + rolldown client bundle
 - 会话删除无引擎 API，索引删除仅支持插件自建库内清理。
 - 时间线画布（@xyflow/react）存在严重渲染 bug，0.2.0 起暂时隐藏入口，修复后恢复。
 
+## 发布与收录
+
+- npm 包：[dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)
+- GitHub Releases：[Releases 页面](https://github.com/Zn-Dk/dsh-session-explorer/releases)
+- 已收录渠道：
+  - [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（主渠道，`data/plugins/Zn-Dk__dsh-session-explorer.yml`）
+  - [0xsline/awesome-deepseek-harness](https://github.com/0xsline/awesome-deepseek-harness)（README + README.zh-CN）
+  - [AdamPlatin123/awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins)（PLUGINS.md）
+
 ## 许可证
 
 MIT

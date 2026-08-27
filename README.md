@@ -58,6 +58,15 @@ pnpm build     # tsc + rolldown client bundle
 - Session deletion has no engine API; index cleanup only covers the plugin's own database.
 - The timeline canvas (@xyflow/react) has a serious rendering bug; the entry is hidden since 0.2.0 and will return once fixed.
 
+## Release & listing
+
+- npm package: [dsh-session-explorer](https://www.npmjs.com/package/dsh-session-explorer)
+- GitHub Releases: [Releases page](https://github.com/Zn-Dk/dsh-session-explorer/releases)
+- Listed in:
+  - [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) (main channel, `data/plugins/Zn-Dk__dsh-session-explorer.yml`)
+  - [0xsline/awesome-deepseek-harness](https://github.com/0xsline/awesome-deepseek-harness) (README + README.zh-CN)
+  - [AdamPlatin123/awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) (PLUGINS.md)
+
 ## License
 
 MIT
