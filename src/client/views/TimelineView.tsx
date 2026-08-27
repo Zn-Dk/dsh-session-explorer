@@ -3,7 +3,7 @@
  * This intentionally does not jump to the original conversation: the host has
  * no stable anchor API yet, so the plugin must remain useful on its own.
  */
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import type { MessageKind, TimelineNode, TimelineTurnsResponse, TimelineNodeKind } from '../../protocol.js'
 import { useI18n, type LocaleServiceLike } from '../i18n.js'
 
@@ -46,6 +46,9 @@ export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession,
   const [wsOpen, setWsOpen] = useState(false)
   const [expandedSeq, setExpandedSeq] = useState<number | null>(null)
 
+  // 会话切换时重置消息展开态（旧会话的 seq 在新会话里可能指向别的消息）
+  useEffect(() => { setExpandedSeq(null) }, [selectedSessionId])
+
   const selected = selectedSessionId === null || selectedSessionId === '' ? null : nodes.find(n => n.sessionId === selectedSessionId) ?? null
 
   // 工作区选项：从节点派生（去重 + 按会话数排序）
@@ -70,6 +73,19 @@ export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession,
       return hay.includes(q)
     }).sort((a, b) => dir * (sortKey === 'created' ? a.createdAt - b.createdAt : sortKey === 'messages' ? a.messageCount - b.messageCount : a.updatedAt - b.updatedAt))
   }, [nodes, query, kind, workspaces, sortKey, sortDir])
+
+  // 选中会话在可见列表中的索引 + 上一条/下一条（纯客户端，按当前筛选/排序后的可见列表走）
+  const selectedIndex = selected ? visible.findIndex(n => n.sessionId === selected.sessionId) : -1
+  const goPrevSession = useCallback(() => {
+    if (selectedIndex <= 0) return
+    const prev = visible[selectedIndex - 1]
+    if (prev) onSelectSession(prev.sessionId)
+  }, [visible, selectedIndex, onSelectSession])
+  const goNextSession = useCallback(() => {
+    if (selectedIndex < 0 || selectedIndex >= visible.length - 1) return
+    const next = visible[selectedIndex + 1]
+    if (next) onSelectSession(next.sessionId)
+  }, [visible, selectedIndex, onSelectSession])
 
   // 过滤/排序/搜索全部客户端完成（nodes 已含全量摘要数据），不触发服务器
   // round-trip——之前 onFilter 每个按键都让 App 把整个视图切换成 loading 占位，表现为"整页刷新"。
@@ -118,23 +134,43 @@ export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession,
     </div>
     <div className={'sex-timeline-main' + (selected ? ' sex-timeline-main-split' : '')}>
       <div className="sex-session-grid">
-        {visible.map(node => <button key={node.sessionId} type="button" className={'sex-session-card sex-session-card-' + node.kind + (selected !== null && selectedSessionId === node.sessionId ? ' sex-session-card-selected' : '')} onClick={() => { onSelectSession(selectedSessionId === node.sessionId ? '' : node.sessionId) }}>
+        {visible.map((node, index) => <button key={node.sessionId} type="button" style={{ animationDelay: Math.min(index * 14, 240) + 'ms' }} className={'sex-session-card sex-session-card-' + node.kind + (selected !== null && selectedSessionId === node.sessionId ? ' sex-session-card-selected' : '')} onClick={() => { onSelectSession(selectedSessionId === node.sessionId ? '' : node.sessionId) }}>
           <div className="sex-session-card-head"><strong>{node.title ?? node.sessionId.slice(0, 12)}</strong><span className={'sex-kind-badge sex-kind-badge-' + node.kind}>{t(node.kind === 'child' ? 'timelineChild' : 'timelineMain')}</span></div>
           <div className="sex-session-card-meta">{shortCwd(node.cwd) || t('timelineUnknownDir')} · {formatTime(node.updatedAt)}</div>
           <div className="sex-session-card-stats">{t('timelineMessages', { n: String(node.messageCount) })} · {t('timelineTools', { n: String(node.toolCount) })}</div>
           <div className="sex-session-card-summary">{node.latestMessage?.text || node.firstMessage?.text || t('timelineNoSummary')}</div>
         </button>)}
       </div>
-      {selected && <aside className="sex-session-detail">
+      {selected && <aside key={selected.sessionId} className="sex-session-detail">
+        <div className="sex-session-detail-nav">
+          <button type="button" className="sex-detail-nav-btn" disabled={selectedIndex <= 0} onClick={goPrevSession} aria-label={t('timelinePrevSession')} title={t('timelinePrevSession')}><span aria-hidden="true">‹</span> {t('timelinePrevSession')}</button>
+          <span className="sex-detail-nav-position">{String(selectedIndex + 1)} / {String(visible.length)}</span>
+          <button type="button" className="sex-detail-nav-btn" disabled={selectedIndex < 0 || selectedIndex >= visible.length - 1} onClick={goNextSession} aria-label={t('timelineNextSession')} title={t('timelineNextSession')}>{t('timelineNextSession')} <span aria-hidden="true">›</span></button>
+        </div>
         <div className="sex-session-detail-head"><div><h3>{selected.title ?? selected.sessionId}</h3><div className="sex-session-detail-meta">{shortCwd(selected.cwd) || t('timelineUnknownDir')} · {formatTime(selected.createdAt)} → {formatTime(selected.updatedAt)}</div></div><span className={'sex-kind-badge sex-kind-badge-' + selected.kind}>{t(selected.kind === 'child' ? 'timelineChild' : 'timelineMain')}</span></div>
         <div className="sex-session-detail-lineage">{t('timelineLineage')}: {selected.parentSessionId ? selected.parentSessionId.slice(0, 12) : t('timelineRootSession')}</div>
-        <div className="sex-message-summary-list">
-          {turns.status === 'loading' && <div className="sex-empty">{t('previewLoading')}</div>}
+        <div key={selected.sessionId} className="sex-message-summary-list">
+          {turns.status === 'loading' && (
+            <div className="sex-summary-skeleton" aria-hidden="true">
+              <div className="sex-skeleton-row" style={{ width: '38%' }} />
+              <div className="sex-skeleton-row" style={{ width: '92%' }} />
+              <div className="sex-skeleton-row" style={{ width: '74%' }} />
+              <div className="sex-skeleton-row" style={{ width: '86%' }} />
+              <div className="sex-skeleton-row" style={{ width: '55%' }} />
+            </div>
+          )}
           {turns.status === 'error' && <div className="sex-error">{turns.error}</div>}
-          {turns.status === 'ready' && turns.data?.turns.map(message => <div key={message.seq} className="sex-message-summary">
-            <button type="button" className="sex-message-summary-toggle" onClick={() => setExpandedSeq(expandedSeq === message.seq ? null : message.seq)}><span className="sex-kind-dot" style={{ background: KIND_COLORS[message.kind] }} /><span className="sex-kind-text" style={{ color: KIND_COLORS[message.kind] }}>{kindLabel(message.kind, t)}</span><span className="sex-message-summary-time">{formatTime(message.time)}</span><span>#{message.seq}</span><span className="sex-message-summary-text">{message.text || t('timelineNoSummary')}</span></button>
-            {expandedSeq === message.seq && <div className="sex-message-expanded">{message.text || t('timelineNoSummary')}</div>}
-          </div>)}
+          {turns.status === 'ready' && turns.data?.turns.map(message => {
+            const isExpanded = expandedSeq === message.seq
+            return (
+            <div key={message.seq} className="sex-message-summary">
+              <button type="button" className="sex-message-summary-toggle" aria-expanded={isExpanded} onClick={() => setExpandedSeq(isExpanded ? null : message.seq)}><span className="sex-kind-dot" style={{ background: KIND_COLORS[message.kind] }} /><span className="sex-kind-text" style={{ color: KIND_COLORS[message.kind] }}>{kindLabel(message.kind, t)}</span><span className="sex-message-summary-time">{formatTime(message.time)}</span><span>#{message.seq}</span><span className="sex-message-summary-text">{message.text || t('timelineNoSummary')}</span><span aria-hidden="true" className={'sex-message-summary-arrow' + (isExpanded ? ' sex-message-summary-arrow-open' : '')}>▸</span></button>
+              <div className={'sex-message-expanded-wrap' + (isExpanded ? ' sex-message-expanded-open' : '')}>
+                <div className="sex-message-expanded">{message.text || t('timelineNoSummary')}</div>
+              </div>
+            </div>
+            )
+          })}
           {turns.status === 'ready' && turns.data?.turns.length === 0 && <div className="sex-empty">{t('timelineNoTurns')}</div>}
         </div>
       </aside>}

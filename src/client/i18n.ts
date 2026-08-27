@@ -92,6 +92,9 @@ export const I18N = {
   'timelineWorkspaceAll': '全部工作区',
   'timelineWorkspaceSelected': '工作区 ×{n}',
   'timelineSortDir': '切换升序/降序',
+  'timelinePrevSession': '上一条',
+  'timelineNextSession': '下一条',
+  'timelineSessionPosition': '{current} / {total}',
   },
   en: {
     'backToSession': 'Back to session',
@@ -175,6 +178,9 @@ export const I18N = {
   'timelineWorkspaceAll': 'All workspaces',
   'timelineWorkspaceSelected': 'Workspaces ×{n}',
   'timelineSortDir': 'Toggle ascending/descending order',
+  'timelinePrevSession': 'Prev',
+  'timelineNextSession': 'Next',
+  'timelineSessionPosition': '{current} / {total}',
   },
 } as const
 
