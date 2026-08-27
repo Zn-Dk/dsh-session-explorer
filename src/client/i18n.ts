@@ -89,6 +89,9 @@ export const I18N = {
   'timelineLineage': '来源会话',
   'timelineRootSession': '顶层会话',
   'timelineNoAnchor': '摘要视图：不会跳转原始会话',
+  'timelineWorkspaceAll': '全部工作区',
+  'timelineWorkspaceSelected': '工作区 ×{n}',
+  'timelineSortDir': '切换升序/降序',
   },
   en: {
     'backToSession': 'Back to session',
@@ -169,6 +172,9 @@ export const I18N = {
   'timelineLineage': 'Parent session',
   'timelineRootSession': 'Root session',
   'timelineNoAnchor': 'Summary view: does not jump to the original session',
+  'timelineWorkspaceAll': 'All workspaces',
+  'timelineWorkspaceSelected': 'Workspaces ×{n}',
+  'timelineSortDir': 'Toggle ascending/descending order',
   },
 } as const
 

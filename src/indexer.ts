@@ -393,14 +393,15 @@ export class SessionIndex {
   /** 单会话二级时间线：按 turn 聚合的消息序列（时间升序）。 */
   turns(sessionId: string, limit = 200): TimelineTurn[] {
     const cap = Math.min(Math.max(limit, 1), 500)
-    const rows = this.db.prepare(`SELECT seq, kind, time, turn, text_main
+    const rows = this.db.prepare(`SELECT seq, kind, time, turn, text_main, text_tool
       FROM messages WHERE session_id = ? ORDER BY time ASC, seq ASC LIMIT ?`).all(sessionId, cap) as Array<Record<string, unknown>>
     return rows.map((row) => ({
       seq: Number(row.seq),
       kind: (row.kind as MessageKind),
       time: Number(row.time),
       turn: row.turn === null || row.turn === undefined ? null : Number(row.turn),
-      text: String(row.text_main ?? '').slice(0, 200),
+      // tool 条目正文在 text_tool（工具名/参数/错误摘要）；其余类型在 text_main。
+      text: String(row.text_main || row.text_tool || '').slice(0, 200),
     }))
   }
 
