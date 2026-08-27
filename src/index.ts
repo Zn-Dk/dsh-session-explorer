@@ -14,7 +14,7 @@ import { SessionIndex, type SessionMeta } from './indexer.js'
 import { fingerprintOf } from './indexer.js'
 import { foldSession, foldTitle } from './transcript.js'
 import { dispatch } from './rpc.js'
-import type { ExplorerRpc, IndexHealth, IndexStatus, RebuildRequest, RebuildResponse, SyncResponse } from './protocol.js'
+import type { ExplorerRpc, IndexHealth, IndexStatus, RebuildRequest, RebuildResponse, SyncResponse, TimelineNodeKind } from './protocol.js'
 
 export const name = 'dsh-session-explorer'
 
@@ -40,6 +40,8 @@ interface SessionHeaderLike {
   id?: unknown
   createdAt?: number
   cwd?: string
+  origin?: unknown
+  parentSession?: unknown
 }
 
 interface PersistenceLike {
@@ -97,6 +99,14 @@ interface CtxLike {
 
 const sessionIdOf = (id: unknown): string | null => (typeof id === 'string' && id.length > 0 ? id : null)
 
+/** 主代理 / 子代理分类：origin === 'subagent' 优先，其次 parentSession 有值。 */
+function kindOf(header: SessionHeaderLike): TimelineNodeKind {
+  if (header.origin === 'subagent') return 'child'
+  if (typeof header.parentSession === 'string' && header.parentSession.length > 0) return 'child'
+  return 'main'
+}
+
+
 /** 同步一个会话的最新日志。 */
 async function syncSession(index: SessionIndex, persistence: PersistenceLike, sessionId: string, revision?: string | null): Promise<boolean> {
   const inspection = await persistence.inspect!(sessionId)
@@ -110,6 +120,7 @@ async function syncSession(index: SessionIndex, persistence: PersistenceLike, se
     cwd: typeof inspection.meta?.cwd === 'string' ? inspection.meta.cwd : null,
     createdAt: typeof inspection.meta?.createdAt === 'number' ? inspection.meta.createdAt : 0,
     updatedAt: Date.now(),
+    kind: kindOf(inspection.meta ?? {}),
     logFingerprint: fingerprintOf(folded.messages),
     logRevision: revision ?? null,
   }
@@ -204,6 +215,10 @@ export function apply(ctx: CtxLike) {
     timeline: async (request) => {
       if (!index) throw new Error('index unavailable')
       return index.timeline(request ?? {})
+    },
+    turns: async (request) => {
+      if (!index) throw new Error('index unavailable')
+      return { sessionId: request.sessionId, turns: index.turns(request.sessionId, request.limit) }
     },
     preview: async (request) => {
       if (!index) throw new Error('index unavailable')

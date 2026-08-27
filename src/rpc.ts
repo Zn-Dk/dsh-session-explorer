@@ -15,6 +15,7 @@ import type {
   SearchRequest,
   SearchResponse,
   TimelineRequest,
+  TurnsRequest,
 } from './protocol.js'
 
 /** 引擎 rpcResultSchema 的错误分支形状（code 必须是 rpcErrorSchema 的合法值）。 */
@@ -54,6 +55,11 @@ export const searchRequestSchema = z.object({
   cwd: z.string().max(2000).optional(),
   limit: z.number().int().min(1).max(200).optional(),
   offset: z.number().int().nonnegative().optional(),
+})
+
+export const turnsRequestSchema = z.object({
+  sessionId: z.string().min(1).max(200),
+  limit: z.number().int().min(1).max(500).optional(),
 })
 
 export const timelineRequestSchema = z.object({
@@ -104,6 +110,11 @@ export async function dispatch(
       const parsed = validate(searchRequestSchema, args)
       if (!('query' in parsed)) return fail(parsed.message)
       return toResult(() => handlers.search(parsed as SearchRequest))
+    }
+    case 'turns': {
+      const parsed = validate(turnsRequestSchema, args ?? {})
+      if ('message' in parsed) return fail(parsed.message)
+      return toResult(() => handlers.turns(parsed as TurnsRequest))
     }
     case 'timeline': {
       const parsed = validate(timelineRequestSchema, args ?? {})

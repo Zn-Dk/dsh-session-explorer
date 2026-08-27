@@ -323,6 +323,13 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
 }
 
 /* 时间线 */
+.sex-timeline {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .sex-flow {
   flex: 1;
   min-height: 0;
@@ -335,6 +342,119 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
 
 .sex-flow .react-flow__node-group {
   border: 1px dashed;
+}
+
+/* 二级时间线：选中卡片后下方展开 */
+.sex-drill {
+  flex: none;
+  max-height: 42%;
+  border-top: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-layer-2, #f9fafb);
+}
+
+.sex-drill-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+}
+
+.sex-drill-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sex-drill-meta {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #888);
+  flex: none;
+}
+
+.sex-drill-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px;
+}
+
+.sex-drill-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+}
+
+.sex-drill-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--dsw-alias-state-business-primary, #4f46e5);
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  cursor: pointer;
+  padding: 0;
+}
+
+.sex-drill-dot:hover {
+  background: var(--dsw-alias-state-business-primary, #4f46e5);
+}
+
+.sex-drill-dot-user {
+  border-color: var(--dsw-alias-state-success-primary, #059669);
+}
+
+/* @xyflow/react 默认浅色变量；DSH 深色主题不会给它加 .dark 类，
+   这里按 DSH design token 桥接，避免白底 + 近白文字（字与背景同色）。 */
+.sex-flow .react-flow,
+.sex-flow .react-flow.dark {
+  --xy-background-color: var(--dsw-alias-bg-base, #fff);
+  --xy-minimap-background-color: var(--dsw-alias-bg-layer-2, #f9fafb);
+  --xy-minimap-mask-background-color: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.4));
+  --xy-minimap-node-background-color: var(--dsw-alias-bg-elevated, #fff);
+  --xy-node-background-color: var(--dsw-alias-bg-elevated, #fff);
+  --xy-node-border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
+  --xy-node-color: var(--dsw-alias-label-primary, #1a1a1a);
+  --xy-node-boxshadow-selected: 0 0 0 2px var(--dsw-alias-state-business-primary, #4f46e5);
+  --xy-controls-button-background-color: var(--dsw-alias-bg-layer-2, #f9fafb);
+  --xy-controls-button-background-color-hover: var(--dsw-alias-bg-layer-3, #fff);
+  --xy-controls-button-color: var(--dsw-alias-label-primary, #1a1a1a);
+  --xy-controls-button-border-color: var(--dsw-alias-border-l2, #e5e7eb);
+  --xy-edge-stroke: var(--dsw-alias-label-tertiary, #888);
+  --xy-background-pattern-color: var(--dsw-alias-border-l2, #e5e7eb);
+  --xy-handle-background-color: var(--dsw-alias-label-primary, #1a1a1a);
+  --xy-handle-border-color: var(--dsw-alias-bg-base, #fff);
+}
+
+/* 深色主题：浮层/节点背景钉死实色，避免半透明主题变量透底 */
+body[data-ds-dark-theme] .sex-flow .react-flow {
+  --xy-background-color: #141414;
+  --xy-minimap-background-color: #1e1e1e;
+  --xy-node-background-color: #232324;
+  --xy-node-color: #e8e8e8;
+  --xy-node-border: 1px solid #3c3c3c;
+  --xy-controls-button-background-color: #2c2c2e;
+  --xy-controls-button-background-color-hover: #3a3a3d;
+  --xy-controls-button-color: #e8e8e8;
+  --xy-controls-button-border-color: #3c3c3c;
+  --xy-edge-stroke: #9a9a9a;
+  --xy-background-pattern-color: #3c3c3c;
+  --xy-handle-background-color: #e8e8e8;
+  --xy-handle-border-color: #232324;
+}
+
+body[data-ds-dark-theme] .sex-drill {
+  background: #232324;
+}
+
+body[data-ds-dark-theme] .sex-drill-title {
+  color: #e8e8e8;
 }
 
 /* 预览 */

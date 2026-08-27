@@ -15,6 +15,8 @@ import type {
   MessageHit,
   PreviewPage,
   TimelineNode,
+  TimelineNodeKind,
+  TimelineTurn,
   IndexStatus,
   MessageKind,
 } from './protocol.js'
@@ -23,7 +25,7 @@ import { makeSnippet } from './transcript.js'
 /** 私有库标记。 */
 export const DB_APP_ID = 0x44534530 // 'DSE0'
 /** 结构版本：schema 变更时 +1。 */
-export const DB_USER_VERSION = 3
+export const DB_USER_VERSION = 4
 
 /** 每会话元数据（同步层传入）。 */
 export interface SessionMeta {
@@ -36,6 +38,8 @@ export interface SessionMeta {
   logFingerprint?: string | null
   /** 源日志 revision（engine listSnapshots 的轻量变更 token；O(1) 快速 diff）。 */
   logRevision?: string | null
+  /** 主代理 / 子代理分类（header.origin === "subagent" 或 parentSession 有值 → child）。 */
+  kind?: TimelineNodeKind
 }
 
 /** djb2 字符串哈希（轻量、稳定，不追求密码学强度）。 */
@@ -77,6 +81,7 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL,
     message_count INTEGER NOT NULL DEFAULT 0,
     tool_count INTEGER NOT NULL DEFAULT 0,
+    subagent_kind TEXT NOT NULL DEFAULT 'main',
     indexed_at INTEGER NOT NULL,
     log_fingerprint TEXT,
     log_revision TEXT,
@@ -151,14 +156,19 @@ export class SessionIndex {
       // 迁移：v1 → v2 补 log_fingerprint 列（无数据，按缺指纹处理 → 增量重建时全量重刷一次）
       if (existed && userVersion >= 1 && userVersion < DB_USER_VERSION) {
         const columns = db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
-        if (!columns.some((column) => column.name === 'log_fingerprint')) {
+        const has = (name: string) => columns.some((column) => column.name === name)
+        if (!has('log_fingerprint')) {
           db.exec('ALTER TABLE sessions ADD COLUMN log_fingerprint TEXT')
         }
-        if (!columns.some((column) => column.name === 'log_revision')) {
+        if (!has('log_revision')) {
           db.exec('ALTER TABLE sessions ADD COLUMN log_revision TEXT')
         }
-        if (!columns.some((column) => column.name === 'error')) {
+        if (!has('error')) {
           db.exec('ALTER TABLE sessions ADD COLUMN error TEXT')
+        }
+        // v3 → v4：主/子代理分类列。存量行回填为 'main'，子代理在下次增量同步时由 header.origin 校正。
+        if (!has('subagent_kind')) {
+          db.exec("ALTER TABLE sessions ADD COLUMN subagent_kind TEXT NOT NULL DEFAULT 'main'")
         }
         db.exec(`PRAGMA user_version = ${DB_USER_VERSION}`)
       }
@@ -222,15 +232,16 @@ export class SessionIndex {
         if (message.kind === 'tool') toolCount++
       }
 
-      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, indexed_at, log_fingerprint, log_revision)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, subagent_kind, indexed_at, log_fingerprint, log_revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           title = excluded.title, cwd = excluded.cwd, created_at = excluded.created_at,
           updated_at = excluded.updated_at, message_count = excluded.message_count,
-          tool_count = excluded.tool_count, indexed_at = excluded.indexed_at,
+          tool_count = excluded.tool_count, subagent_kind = excluded.subagent_kind,
+          indexed_at = excluded.indexed_at,
           log_fingerprint = excluded.log_fingerprint, log_revision = excluded.log_revision,
           error = NULL`)
-        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, now, meta.logFingerprint ?? null, meta.logRevision ?? null)
+        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, meta.kind ?? 'main', now, meta.logFingerprint ?? null, meta.logRevision ?? null)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -352,7 +363,7 @@ export class SessionIndex {
       where.push('updated_at <= ?')
       params.push(options.to)
     }
-    const rows = this.db.prepare(`SELECT session_id, title, cwd, created_at, updated_at, message_count, tool_count
+    const rows = this.db.prepare(`SELECT session_id, title, cwd, created_at, updated_at, message_count, tool_count, subagent_kind
       FROM sessions
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY updated_at DESC
@@ -365,6 +376,21 @@ export class SessionIndex {
       updatedAt: Number(row.updated_at),
       messageCount: Number(row.message_count),
       toolCount: Number(row.tool_count),
+      kind: (row.subagent_kind === 'child' ? 'child' : 'main'),
+    }))
+  }
+
+    /** 单会话二级时间线：按 turn 聚合的消息序列（时间升序）。 */
+  turns(sessionId: string, limit = 200): TimelineTurn[] {
+    const cap = Math.min(Math.max(limit, 1), 500)
+    const rows = this.db.prepare(`SELECT seq, kind, time, turn, text_main
+      FROM messages WHERE session_id = ? ORDER BY time ASC, seq ASC LIMIT ?`).all(sessionId, cap) as Array<Record<string, unknown>>
+    return rows.map((row) => ({
+      seq: Number(row.seq),
+      kind: (row.kind as MessageKind),
+      time: Number(row.time),
+      turn: row.turn === null || row.turn === undefined ? null : Number(row.turn),
+      text: String(row.text_main ?? '').slice(0, 200),
     }))
   }
 

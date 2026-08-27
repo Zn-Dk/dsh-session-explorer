@@ -8,7 +8,7 @@ import { envelopeError, usePanelStore } from './store.js'
 import { SearchView } from './views/SearchView.js'
 import { TimelineView } from './views/TimelineView.js'
 import { PreviewView } from './views/PreviewView.js'
-import type { IndexStatus, MessageHit, TimelineNode } from '../protocol.js'
+import type { IndexStatus, MessageHit, TimelineNode, TimelineTurnsResponse } from '../protocol.js'
 import { useI18n, type LocaleServiceLike } from './i18n.js'
 
 export interface AppProps {
@@ -33,6 +33,8 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
   const { t } = useI18n(locale)
   const [view, setView] = useState<View>({ name: 'search' })
   const [timeline, setTimeline] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; nodes: TimelineNode[]; error: string | null }>({ status: 'idle', nodes: [], error: null })
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [turns, setTurns] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; data: TimelineTurnsResponse | null; error: string | null }>({ status: 'idle', data: null, error: null })
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [rebuilding, setRebuilding] = useState(false)
   const [rebuildResult, setRebuildResult] = useState<string | null>(null)
@@ -49,6 +51,21 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
       setTimeline({ status: 'ready', nodes: res.value ?? [], error: null })
     } catch (error) {
       setTimeline({ status: 'error', nodes: [], error: String(error) })
+    }
+  }, [client])
+
+  const loadTurns = useCallback(async (sessionId: string) => {
+    setSelectedSessionId(sessionId)
+    setTurns({ status: 'loading', data: null, error: null })
+    try {
+      const res = await client.turns(sessionId, 300)
+      if (!res.ok) {
+        setTurns({ status: 'error', data: null, error: envelopeError(res) || 'turns failed' })
+        return
+      }
+      setTurns({ status: 'ready', data: res.value ?? null, error: null })
+    } catch (error) {
+      setTurns({ status: 'error', data: null, error: String(error) })
     }
   }, [client])
 
@@ -199,8 +216,15 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
           ? <div className="sex-empty">{t('loadingTimeline')}</div>
           : timeline.status === 'error'
             ? <div className="sex-error">{timeline.error}</div>
-            : <TimelineView nodes={timeline.nodes} onPreview={openPreview}
-            locale={locale} />)}
+            : <TimelineView
+            nodes={timeline.nodes}
+            selectedSessionId={selectedSessionId}
+            turns={turns}
+            onSelectSession={loadTurns}
+            onDrillTurn={onOpenSession}
+            onPreview={openPreview}
+            locale={locale}
+          />)}
         {view.name === 'preview' && (
           <PreviewView
             client={client}

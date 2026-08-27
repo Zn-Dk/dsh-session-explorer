@@ -292,7 +292,7 @@ test('reset clears sessions and messages', () => {
   }
 })
 
-test('schema migration adds log_fingerprint/log_revision columns to v1 db', () => {
+test('schema migration adds log_fingerprint/log_revision/subagent_kind columns to v1 db', () => {
   const file = tmpDb()
   // 手工造一个 v1 库（无 log_fingerprint 列）
   const db = new DatabaseSync(file)
@@ -318,15 +318,17 @@ test('schema migration adds log_fingerprint/log_revision columns to v1 db', () =
     text_tool TEXT NOT NULL DEFAULT ''
   )`)
   db.close()
-  // open 应迁移到 v2 并加列
+  // open 应迁移到 v4 并加列（log_fingerprint / log_revision / error / subagent_kind）
   const index = SessionIndex.open(file)
   try {
     const check = index.listFingerprints()
     assert.equal(check.size, 0)
     const uv = new DatabaseSync(file)
     const version = uv.prepare('PRAGMA user_version').get()
+    const cols = uv.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
     uv.close()
-    assert.equal(version.user_version, 3)
+    assert.equal(version.user_version, 4)
+    assert.ok(cols.some((c) => c.name === 'subagent_kind'))
   } finally {
     index.close()
   }

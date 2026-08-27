@@ -50,6 +50,25 @@ export interface TimelineNode {
   updatedAt: number
   messageCount: number
   toolCount: number
+  /** 主代理 / 子代理分类（header.origin === "subagent" 或 parentSession 有值 → child）。 */
+  kind: TimelineNodeKind
+}
+
+export type TimelineNodeKind = 'main' | 'child'
+
+/** 单会话二级时间线的最小粒度（当前按消息折叠，含 turn 序号）。 */
+export interface TimelineTurn {
+  seq: number
+  kind: MessageKind
+  time: number
+  turn: number | null
+  /** 消息正文前缀（≤200 字符，tool 条目为工具名/错误摘要）。 */
+  text: string
+}
+
+export interface TimelineTurnsResponse {
+  sessionId: string
+  turns: TimelineTurn[]
 }
 
 /** 预览页：焦点消息 + 上下文窗口。 */
@@ -96,6 +115,7 @@ export interface SearchResultItem extends MessageHit {}
 export interface ExplorerRpc {
   search(request: SearchRequest): Promise<SearchResponse>
   timeline(request?: TimelineRequest): Promise<TimelineNode[]>
+  turns(request: TurnsRequest): Promise<TimelineTurnsResponse>
   preview(request: PreviewRequest): Promise<PreviewPage | null>
   indexStatus(): Promise<IndexStatus>
   /** 打开面板时触发一次轻量同步（live 会话 + 未索引新会话）。 */
@@ -115,6 +135,12 @@ export interface SyncResponse {
 export interface TimelineRequest {
   from?: number
   to?: number
+  limit?: number
+}
+
+/** 单会话二级时间线请求。 */
+export interface TurnsRequest {
+  sessionId: string
   limit?: number
 }
 

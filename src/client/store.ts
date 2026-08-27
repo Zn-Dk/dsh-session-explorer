@@ -13,6 +13,7 @@ import type {
   SearchRequest,
   SearchResponse,
   TimelineNode,
+  TimelineTurnsResponse,
 } from '../protocol.js'
 
 /** 面板开关状态（shared by sidebar entry + overlay panel）。 */
@@ -75,6 +76,7 @@ export function envelopeError(res: { ok: boolean; error?: { message?: string; co
 export interface ExplorerClient {
   search(request: SearchRequest): Promise<RpcEnvelope<SearchResponse>>
   timeline(limit?: number): Promise<RpcEnvelope<TimelineNode[]>>
+  turns(sessionId: string, limit?: number): Promise<RpcEnvelope<TimelineTurnsResponse>>
   preview(sessionId: string, seq: number, before?: number, after?: number): Promise<RpcEnvelope<PreviewPage | null>>
   indexStatus(): Promise<RpcEnvelope<IndexStatus>>
   /** 打开面板时触发一次轻量同步（live 会话 + 未索引新会话）。 */
@@ -110,6 +112,7 @@ export function createExplorerClient(connection: unknown, channel: string): Expl
   return {
     search: (request) => call('search', request) as Promise<RpcEnvelope<SearchResponse>>,
     timeline: (limit) => call('timeline', limit ? { limit } : {}) as Promise<RpcEnvelope<TimelineNode[]>>,
+    turns: (sessionId, limit) => call('turns', limit ? { sessionId, limit } : { sessionId }) as Promise<RpcEnvelope<TimelineTurnsResponse>>,
     preview: (sessionId, seq, before, after) => call('preview', { sessionId, seq, before, after }) as Promise<RpcEnvelope<PreviewPage | null>>,
     indexStatus: () => call('indexStatus') as Promise<RpcEnvelope<IndexStatus>>,
     sync: () => call('sync') as Promise<RpcEnvelope<{ synced: number; failed: number }>>,

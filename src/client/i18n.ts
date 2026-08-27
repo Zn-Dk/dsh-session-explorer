@@ -71,6 +71,9 @@ export const I18N = {
     'timelineEmpty': '暂无会话',
   'timelineUnknownDir': '(未知目录)',
   'timelineSessionCount': '{n} 个会话',
+  'timelineTurnCount': '{n} 条消息',
+  'timelineOpenSession': '打开会话',
+  'timelineNoTurns': '该会话暂无已索引消息',
   },
   en: {
     'backToSession': 'Back to session',
@@ -133,6 +136,9 @@ export const I18N = {
     'timelineEmpty': 'No sessions yet',
   'timelineUnknownDir': '(unknown directory)',
   'timelineSessionCount': '{n} sessions',
+  'timelineTurnCount': '{n} messages',
+  'timelineOpenSession': 'Open session',
+  'timelineNoTurns': 'No indexed messages in this session',
   },
 } as const
 
