@@ -306,6 +306,31 @@ test('reset clears sessions and messages', () => {
   }
 })
 
+test('schema reconciliation repairs a v4 db missing parent_session_id', () => {
+  const file = tmpDb()
+  const db = new DatabaseSync(file)
+  db.exec('PRAGMA application_id = ' + DB_APP_ID)
+  db.exec('PRAGMA user_version = 4')
+  db.exec(`CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY, title TEXT, cwd TEXT,
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+    message_count INTEGER NOT NULL DEFAULT 0, tool_count INTEGER NOT NULL DEFAULT 0,
+    subagent_kind TEXT NOT NULL DEFAULT 'main', indexed_at INTEGER NOT NULL,
+    log_fingerprint TEXT, log_revision TEXT, error TEXT
+  ) WITHOUT ROWID`)
+  db.exec(`CREATE TABLE messages (
+    session_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL,
+    time INTEGER NOT NULL, turn INTEGER, text_main TEXT NOT NULL DEFAULT '', text_tool TEXT NOT NULL DEFAULT ''
+  )`)
+  db.close()
+  const index = SessionIndex.open(file)
+  try {
+    const columns = new DatabaseSync(file).prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
+    assert.ok(columns.some((column) => column.name === 'parent_session_id'))
+    assert.deepEqual(index.timeline(), [])
+  } finally { index.close() }
+})
+
 test('schema migration adds log_fingerprint/log_revision/subagent_kind columns to v1 db', () => {
   const file = tmpDb()
   // 手工造一个 v1 库（无 log_fingerprint 列）

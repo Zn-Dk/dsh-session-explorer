@@ -156,28 +156,20 @@ export class SessionIndex {
       db.exec('PRAGMA journal_mode = WAL')
       db.exec('PRAGMA synchronous = NORMAL')
       for (const stmt of SCHEMA) db.exec(stmt)
-      // 迁移：v1 → v2 补 log_fingerprint 列（无数据，按缺指纹处理 → 增量重建时全量重刷一次）
-      if (existed && userVersion >= 1 && userVersion < DB_USER_VERSION) {
+      // Schema reconciliation is intentionally column-based, not version-only.
+      // A v4 database may have been stamped before parent_session_id was introduced;
+      // repair missing columns even when user_version already equals DB_USER_VERSION.
+      if (existed && userVersion >= 1) {
         const columns = db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
         const has = (name: string) => columns.some((column) => column.name === name)
-        if (!has('log_fingerprint')) {
-          db.exec('ALTER TABLE sessions ADD COLUMN log_fingerprint TEXT')
-        }
-        if (!has('log_revision')) {
-          db.exec('ALTER TABLE sessions ADD COLUMN log_revision TEXT')
-        }
-        if (!has('error')) {
-          db.exec('ALTER TABLE sessions ADD COLUMN error TEXT')
-        }
-        // v3 → v4：主/子代理分类列。存量行回填为 'main'，子代理在下次增量同步时由 header.origin 校正。
-        if (!has('parent_session_id')) {
-          db.exec('ALTER TABLE sessions ADD COLUMN parent_session_id TEXT')
-        }
-        if (!has('subagent_kind')) {
-          db.exec("ALTER TABLE sessions ADD COLUMN subagent_kind TEXT NOT NULL DEFAULT 'main'")
-        }
-        db.exec(`PRAGMA user_version = ${DB_USER_VERSION}`)
+        if (!has('log_fingerprint')) db.exec('ALTER TABLE sessions ADD COLUMN log_fingerprint TEXT')
+        if (!has('log_revision')) db.exec('ALTER TABLE sessions ADD COLUMN log_revision TEXT')
+        if (!has('error')) db.exec('ALTER TABLE sessions ADD COLUMN error TEXT')
+        if (!has('parent_session_id')) db.exec('ALTER TABLE sessions ADD COLUMN parent_session_id TEXT')
+        if (!has('subagent_kind')) db.exec("ALTER TABLE sessions ADD COLUMN subagent_kind TEXT NOT NULL DEFAULT 'main'")
+        if (userVersion < DB_USER_VERSION) db.exec(`PRAGMA user_version = ${DB_USER_VERSION}`)
       }
+
       const index = new SessionIndex(db, path)
       index.chmod()
       return index
