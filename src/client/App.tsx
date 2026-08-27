@@ -56,6 +56,11 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
 
   const loadTurns = useCallback(async (sessionId: string) => {
     setSelectedSessionId(sessionId)
+    // 空串 = 折叠详情（再次点击同一卡片），不发 RPC
+    if (sessionId === '') {
+      setTurns({ status: 'idle', data: null, error: null })
+      return
+    }
     setTurns({ status: 'loading', data: null, error: null })
     try {
       const res = await client.turns(sessionId, 300)
@@ -223,7 +228,6 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
             onSelectSession={loadTurns}
             onDrillTurn={onOpenSession}
             onPreview={openPreview}
-            onFilter={loadTimeline}
             locale={locale}
           />)}
         {view.name === 'preview' && (

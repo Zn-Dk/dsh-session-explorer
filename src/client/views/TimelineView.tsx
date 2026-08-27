@@ -14,7 +14,6 @@ export interface TimelineViewProps {
   onSelectSession: (sessionId: string) => void
   onDrillTurn: (sessionId: string) => void
   onPreview: (sessionId: string, seq: number | null) => void
-  onFilter: (options: Record<string, unknown>) => void
   locale?: LocaleServiceLike
 }
 
@@ -26,14 +25,14 @@ const formatTime = (value: number): string => new Date(value).toLocaleString()
 const kindLabel = (kind: string, t: (key: any, vars?: Record<string, string>) => string): string => kind === 'user' ? t('kindUser' as never) : kind === 'assistant' ? t('kindAssistant' as never) : kind === 'steering' ? t('kindSteering' as never) : t('kindTool' as never)
 const shortCwd = (value: string | null): string => value ? (value.split(/[\/]/).filter(Boolean).pop() ?? value) : ''
 
-export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession, onDrillTurn, onPreview, onFilter, locale }: TimelineViewProps) {
+export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession, onDrillTurn, onPreview, locale }: TimelineViewProps) {
   const { t } = useI18n(locale)
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<TimelineNodeKind | 'all'>('all')
   const [sort, setSort] = useState<'updated' | 'created' | 'messages'>('updated')
   const [expandedSeq, setExpandedSeq] = useState<number | null>(null)
 
-  const selected = selectedSessionId === null ? null : nodes.find(n => n.sessionId === selectedSessionId) ?? null
+  const selected = selectedSessionId === null || selectedSessionId === '' ? null : nodes.find(n => n.sessionId === selectedSessionId) ?? null
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return nodes.filter(n => {
@@ -44,9 +43,11 @@ export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession,
     }).sort((a,b) => sort === 'created' ? b.createdAt-a.createdAt : sort === 'messages' ? b.messageCount-a.messageCount : b.updatedAt-a.updatedAt)
   }, [nodes, query, kind, sort])
 
-  const applyQuery = useCallback((value: string) => { setQuery(value); onFilter({ query: value, ...(kind === 'all' ? {} : { kinds: [kind] }), sort }) }, [kind, sort, onFilter])
-  const applyKind = useCallback((value: TimelineNodeKind | 'all') => { setKind(value); onFilter({ query, ...(value === 'all' ? {} : { kinds: [value] }), sort }) }, [query, sort, onFilter])
-  const applySort = useCallback((value: 'updated' | 'created' | 'messages') => { setSort(value); onFilter({ query, ...(kind === 'all' ? {} : { kinds: [kind] }), sort: value }) }, [query, kind, onFilter])
+  // 过滤/排序/搜索全部客户端完成（nodes 已含全量摘要数据），不触发服务器
+  // round-trip——之前 onFilter 每个按键都让 App 把整个视图切换成 loading 占位，表现为"整页刷新"。
+  const applyQuery = useCallback((value: string) => { setQuery(value) }, [])
+  const applyKind = useCallback((value: TimelineNodeKind | 'all') => { setKind(value) }, [])
+  const applySort = useCallback((value: 'updated' | 'created' | 'messages') => { setSort(value) }, [])
 
   if (nodes.length === 0) return <div className="sex-empty">{t('timelineEmpty')}</div>
   return <div className="sex-timeline-overview">
@@ -60,9 +61,9 @@ export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession,
       </select>
       <span className="sex-timeline-count">{t('timelineVisibleCount', { n: String(visible.length) })}</span>
     </div>
-    <div className="sex-timeline-main">
+    <div className={'sex-timeline-main' + (selected ? ' sex-timeline-main-split' : '')}>
       <div className="sex-session-grid">
-        {visible.map(node => <button key={node.sessionId} type="button" className={'sex-session-card sex-session-card-' + node.kind + (selectedSessionId === node.sessionId ? ' sex-session-card-selected' : '')} onClick={() => onSelectSession(node.sessionId)}>
+        {visible.map(node => <button key={node.sessionId} type="button" className={'sex-session-card sex-session-card-' + node.kind + (selected !== null && selectedSessionId === node.sessionId ? ' sex-session-card-selected' : '')} onClick={() => { onSelectSession(selectedSessionId === node.sessionId ? '' : node.sessionId) }}>
           <div className="sex-session-card-head"><strong>{node.title ?? node.sessionId.slice(0, 12)}</strong><span className="sex-kind-badge">{t(node.kind === 'child' ? 'timelineChild' : 'timelineMain')}</span></div>
           <div className="sex-session-card-meta">{shortCwd(node.cwd) || t('timelineUnknownDir')} · {formatTime(node.updatedAt)}</div>
           <div className="sex-session-card-stats">{t('timelineMessages', { n: String(node.messageCount) })} · {t('timelineTools', { n: String(node.toolCount) })}</div>

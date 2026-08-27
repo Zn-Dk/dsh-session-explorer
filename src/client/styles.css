@@ -332,6 +332,16 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
 .sex-timeline-sort { height: 28px; border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-radius: 7px; background: var(--dsw-alias-bg-layer-2, #f9fafb); color: var(--dsw-alias-label-primary, #1a1a1a); padding: 0 7px; }
 .sex-timeline-count { margin-left: auto; color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; }
 .sex-timeline-main { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+/* 有选中会话时：左卡片流 + 右详情 sticky 双栏，详情不再埋在滚动流末尾 */
+.sex-timeline-main-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 14px; align-items: start; overflow: hidden; }
+.sex-timeline-main-split .sex-session-grid { max-height: 100%; overflow-y: auto; padding-right: 4px; }
+.sex-timeline-main-split .sex-session-detail { position: sticky; top: 0; max-height: 100%; overflow-y: auto; margin-top: 0; }
+/* 窄屏退化为单列：详情在卡片流下方全宽展示 */
+@media (max-width: 960px) {
+  .sex-timeline-main-split { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .sex-timeline-main-split .sex-session-grid { max-height: none; overflow: visible; }
+  .sex-timeline-main-split .sex-session-detail { position: static; max-height: none; }
+}
 .sex-session-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; align-items: start; }
 .sex-session-card { min-width: 0; text-align: left; padding: 12px; border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-left: 4px solid var(--dsw-alias-state-business-primary, #4f46e5); border-radius: 10px; background: var(--dsw-alias-bg-elevated, #fff); color: var(--dsw-alias-label-primary, #1a1a1a); cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s; }
 .sex-session-card:hover { border-color: var(--dsw-alias-border-l3, #c7d2fe); transform: translateY(-1px); }
