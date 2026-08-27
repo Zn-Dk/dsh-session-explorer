@@ -52,6 +52,20 @@ export interface TimelineNode {
   toolCount: number
   /** 主代理 / 子代理分类（header.origin === "subagent" 或 parentSession 有值 → child）。 */
   kind: TimelineNodeKind
+  /** Durable lineage parent; used for the detail card, never for anchor jumping. */
+  parentSessionId: string | null
+  /** First indexed message summary, if any. */
+  firstMessage: TimelineMessageSummary | null
+  /** Most recent indexed message summary, if any. */
+  latestMessage: TimelineMessageSummary | null
+}
+
+export interface TimelineMessageSummary {
+  seq: number
+  kind: MessageKind
+  time: number
+  turn: number | null
+  text: string
 }
 
 export type TimelineNodeKind = 'main' | 'child'
@@ -136,6 +150,10 @@ export interface TimelineRequest {
   from?: number
   to?: number
   limit?: number
+  query?: string
+  kinds?: TimelineNodeKind[]
+  cwd?: string
+  sort?: 'updated' | 'created' | 'messages'
 }
 
 /** 单会话二级时间线请求。 */

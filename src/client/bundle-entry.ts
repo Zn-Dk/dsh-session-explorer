@@ -15,7 +15,6 @@ import { createExplorerClient, createPanelStore, usePanelStore } from './store.j
 import { App } from './App.js'
 import type { LocaleServiceLike } from './i18n.js'
 import styles from './styles.css'
-import xyflowStyles from '@xyflow/react/dist/style.css'
 
 export const CHANNEL = '/dsh-session-explorer'
 
@@ -272,20 +271,13 @@ export function factory(require: (spec: string) => unknown) {
       store.close()
     }
 
-    // CSS 幂等注入（自身样式 + @xyflow/react 官方基础样式——缺它画布整体崩坏，见 TimelineView 修复史）
+    // CSS 幂等注入
     const tagId = 'dsh-session-explorer/styles.css'
     if (document.querySelector('style[data-plugin-css="' + tagId + '"]') === null) {
       const tag = document.createElement('style')
       tag.dataset.pluginCss = tagId
       tag.textContent = styles
       document.head.appendChild(tag)
-    }
-    const flowCssId = 'dsh-session-explorer/xyflow.style.css'
-    if (document.querySelector('style[data-plugin-css="' + flowCssId + '"]') === null) {
-      const flowTag = document.createElement('style')
-      flowTag.dataset.pluginCss = flowCssId
-      flowTag.textContent = typeof xyflowStyles === 'string' ? xyflowStyles : String((xyflowStyles as { default?: string })?.default ?? '')
-      document.head.appendChild(flowTag)
     }
 
     // 侧栏入口 label：跟随 locale（中文「会话浏览器」/ 英文「Session Explorer」）

@@ -40,10 +40,10 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
   const [rebuildResult, setRebuildResult] = useState<string | null>(null)
   const [rebuildDialog, setRebuildDialog] = useState<{ open: boolean; health: { healthy: boolean; problems: string[] } | null; checking: boolean; mode: 'incremental' | 'full' }>({ open: false, health: null, checking: false, mode: 'incremental' })
 
-  const loadTimeline = useCallback(async () => {
+  const loadTimeline = useCallback(async (options: Record<string, unknown> = {}) => {
     setTimeline({ status: 'loading', nodes: [], error: null })
     try {
-      const res = await client.timeline(500)
+      const res = await client.timeline({ ...options, limit: 500 })
       if (!res.ok) {
         setTimeline({ status: 'error', nodes: [], error: envelopeError(res) || 'timeline failed' })
         return
@@ -223,6 +223,7 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
             onSelectSession={loadTurns}
             onDrillTurn={onOpenSession}
             onPreview={openPreview}
+            onFilter={loadTimeline}
             locale={locale}
           />)}
         {view.name === 'preview' && (

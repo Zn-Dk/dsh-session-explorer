@@ -121,6 +121,7 @@ async function syncSession(index: SessionIndex, persistence: PersistenceLike, se
     createdAt: typeof inspection.meta?.createdAt === 'number' ? inspection.meta.createdAt : 0,
     updatedAt: Date.now(),
     kind: kindOf(inspection.meta ?? {}),
+    parentSessionId: typeof inspection.meta?.parentSession === 'string' ? inspection.meta.parentSession : null,
     logFingerprint: fingerprintOf(folded.messages),
     logRevision: revision ?? null,
   }
@@ -314,6 +315,8 @@ export function apply(ctx: CtxLike) {
               cwd: typeof inspection.meta?.cwd === 'string' ? inspection.meta.cwd : null,
               createdAt: typeof inspection.meta?.createdAt === 'number' ? inspection.meta.createdAt : 0,
               updatedAt: Date.now(),
+              kind: kindOf(inspection.meta ?? {}),
+              parentSessionId: typeof inspection.meta?.parentSession === 'string' ? inspection.meta.parentSession : null,
               logFingerprint: currentFp,
               logRevision: currentRev,
             }

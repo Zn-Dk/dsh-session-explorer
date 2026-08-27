@@ -75,7 +75,7 @@ export function envelopeError(res: { ok: boolean; error?: { message?: string; co
 /** client 侧 rpc 封装。 */
 export interface ExplorerClient {
   search(request: SearchRequest): Promise<RpcEnvelope<SearchResponse>>
-  timeline(limit?: number): Promise<RpcEnvelope<TimelineNode[]>>
+  timeline(options?: Record<string, unknown>): Promise<RpcEnvelope<TimelineNode[]>>
   turns(sessionId: string, limit?: number): Promise<RpcEnvelope<TimelineTurnsResponse>>
   preview(sessionId: string, seq: number, before?: number, after?: number): Promise<RpcEnvelope<PreviewPage | null>>
   indexStatus(): Promise<RpcEnvelope<IndexStatus>>
@@ -111,7 +111,7 @@ export function createExplorerClient(connection: unknown, channel: string): Expl
   const call = (method: string, payload?: unknown): Promise<unknown> => rpc.call!(channel, method, payload === undefined ? {} : payload)
   return {
     search: (request) => call('search', request) as Promise<RpcEnvelope<SearchResponse>>,
-    timeline: (limit) => call('timeline', limit ? { limit } : {}) as Promise<RpcEnvelope<TimelineNode[]>>,
+    timeline: (options) => call('timeline', options ?? {}) as Promise<RpcEnvelope<TimelineNode[]>>,
     turns: (sessionId, limit) => call('turns', limit ? { sessionId, limit } : { sessionId }) as Promise<RpcEnvelope<TimelineTurnsResponse>>,
     preview: (sessionId, seq, before, after) => call('preview', { sessionId, seq, before, after }) as Promise<RpcEnvelope<PreviewPage | null>>,
     indexStatus: () => call('indexStatus') as Promise<RpcEnvelope<IndexStatus>>,

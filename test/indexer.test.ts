@@ -25,7 +25,7 @@ function msg(overrides: Partial<IndexableMessage> = {}): IndexableMessage {
   }
 }
 
-function meta(overrides: Partial<{ sessionId: string; title: string | null; cwd: string | null; createdAt: number; updatedAt: number; logFingerprint: string | null }> = {}) {
+function meta(overrides: Partial<{ sessionId: string; title: string | null; cwd: string | null; createdAt: number; updatedAt: number; logFingerprint: string | null; kind: 'main' | 'child'; parentSessionId: string | null }> = {}) {
   return {
     sessionId: 's1',
     title: '重构 indexer',
@@ -177,6 +177,20 @@ test('timeline returns session summaries ordered by recency', () => {
   } finally {
     index.close()
   }
+})
+
+test('timeline filters, sorts, and returns message summaries plus lineage', () => {
+  const index = SessionIndex.open(tmpDb())
+  try {
+    index.upsertSession(meta({ sessionId: 'main-a', title: 'Alpha', cwd: '/workspace/a', updatedAt: 1000, kind: 'main' }), [msg({ sessionId: 'main-a', seq: 1, textMain: 'first alpha' }), msg({ sessionId: 'main-a', seq: 2, textMain: 'latest alpha' })])
+    index.upsertSession(meta({ sessionId: 'child-a', title: 'Beta child', cwd: '/workspace/a', updatedAt: 2000, kind: 'child', parentSessionId: 'main-a' }), [msg({ sessionId: 'child-a', seq: 3, textMain: 'child summary' })])
+    const child = index.timeline({ kinds: ['child'] })
+    assert.deepEqual(child.map((n) => n.sessionId), ['child-a'])
+    assert.equal(child[0].parentSessionId, 'main-a')
+    assert.equal(child[0].firstMessage?.text, 'child summary')
+    assert.equal(index.timeline({ query: 'alpha' }).length, 1)
+    assert.equal(index.timeline({ sort: 'messages' })[0].sessionId, 'main-a')
+  } finally { index.close() }
 })
 
 test('preview returns focus plus bounded context window', () => {

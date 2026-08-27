@@ -17,6 +17,7 @@ import type {
   TimelineNode,
   TimelineNodeKind,
   TimelineTurn,
+  TimelineMessageSummary,
   IndexStatus,
   MessageKind,
 } from './protocol.js'
@@ -40,6 +41,7 @@ export interface SessionMeta {
   logRevision?: string | null
   /** 主代理 / 子代理分类（header.origin === "subagent" 或 parentSession 有值 → child）。 */
   kind?: TimelineNodeKind
+  parentSessionId?: string | null
 }
 
 /** djb2 字符串哈希（轻量、稳定，不追求密码学强度）。 */
@@ -81,6 +83,7 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL,
     message_count INTEGER NOT NULL DEFAULT 0,
     tool_count INTEGER NOT NULL DEFAULT 0,
+    parent_session_id TEXT,
     subagent_kind TEXT NOT NULL DEFAULT 'main',
     indexed_at INTEGER NOT NULL,
     log_fingerprint TEXT,
@@ -167,6 +170,9 @@ export class SessionIndex {
           db.exec('ALTER TABLE sessions ADD COLUMN error TEXT')
         }
         // v3 → v4：主/子代理分类列。存量行回填为 'main'，子代理在下次增量同步时由 header.origin 校正。
+        if (!has('parent_session_id')) {
+          db.exec('ALTER TABLE sessions ADD COLUMN parent_session_id TEXT')
+        }
         if (!has('subagent_kind')) {
           db.exec("ALTER TABLE sessions ADD COLUMN subagent_kind TEXT NOT NULL DEFAULT 'main'")
         }
@@ -232,16 +238,16 @@ export class SessionIndex {
         if (message.kind === 'tool') toolCount++
       }
 
-      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, subagent_kind, indexed_at, log_fingerprint, log_revision)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      this.db.prepare(`INSERT INTO sessions(session_id, title, cwd, created_at, updated_at, message_count, tool_count, parent_session_id, subagent_kind, indexed_at, log_fingerprint, log_revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
           title = excluded.title, cwd = excluded.cwd, created_at = excluded.created_at,
           updated_at = excluded.updated_at, message_count = excluded.message_count,
-          tool_count = excluded.tool_count, subagent_kind = excluded.subagent_kind,
+          tool_count = excluded.tool_count, parent_session_id = excluded.parent_session_id, subagent_kind = excluded.subagent_kind,
           indexed_at = excluded.indexed_at,
           log_fingerprint = excluded.log_fingerprint, log_revision = excluded.log_revision,
           error = NULL`)
-        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, meta.kind ?? 'main', now, meta.logFingerprint ?? null, meta.logRevision ?? null)
+        .run(meta.sessionId, meta.title, meta.cwd, meta.createdAt, meta.updatedAt, messages.length, toolCount, meta.parentSessionId ?? null, meta.kind ?? 'main', now, meta.logFingerprint ?? null, meta.logRevision ?? null)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -350,37 +356,49 @@ export class SessionIndex {
     return { items, nextOffset: hasMore ? offset + limit : null }
   }
 
-  /** 时间线：会话级摘要（不加载消息）。 */
-  timeline(options: { from?: number; to?: number; limit?: number } = {}): TimelineNode[] {
-    const limit = Math.min(Math.max(options.limit ?? 200, 1), 1000)
+  /** 会话总览：摘要 + 过滤（不加载完整消息）。 */
+  timeline(options: { from?: number; to?: number; limit?: number; query?: string; kinds?: TimelineNodeKind[]; cwd?: string; sort?: 'updated' | 'created' | 'messages' } = {}): TimelineNode[] {
+    const limit = Math.min(Math.max(options.limit ?? 500, 1), 1000)
     const where: string[] = []
-    const params: number[] = []
-    if (typeof options.from === 'number') {
-      where.push('updated_at >= ?')
-      params.push(options.from)
+    const params: (number | string)[] = []
+    if (typeof options.from === 'number') { where.push('updated_at >= ?'); params.push(options.from) }
+    if (typeof options.to === 'number') { where.push('updated_at <= ?'); params.push(options.to) }
+    if (options.cwd !== undefined && options.cwd !== '') { where.push("cwd LIKE ? ESCAPE '\\'"); params.push('%' + SessionIndex.escapeLike(options.cwd) + '%') }
+    const kinds = options.kinds?.filter(k => k === 'main' || k === 'child') ?? []
+    if (kinds.length === 1) { where.push('subagent_kind = ?'); params.push(kinds[0]) }
+    const q = options.query?.trim()
+    if (q !== undefined && q !== '') {
+      const like = '%' + SessionIndex.escapeLike(q) + '%'
+      where.push("(COALESCE(title, '') LIKE ? ESCAPE '\\' OR COALESCE(cwd, '') LIKE ? ESCAPE '\\' OR session_id LIKE ? ESCAPE '\\')")
+      params.push(like, like, like)
     }
-    if (typeof options.to === 'number') {
-      where.push('updated_at <= ?')
-      params.push(options.to)
-    }
-    const rows = this.db.prepare(`SELECT session_id, title, cwd, created_at, updated_at, message_count, tool_count, subagent_kind
+    const order = options.sort === 'created' ? 'created_at DESC' : options.sort === 'messages' ? 'message_count DESC, updated_at DESC' : 'updated_at DESC'
+    const rows = this.db.prepare(`SELECT session_id, title, cwd, created_at, updated_at, message_count, tool_count, subagent_kind, parent_session_id
       FROM sessions
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY updated_at DESC
-      LIMIT ?`).all(...params, limit) as Array<Record<string, unknown>>
-    return rows.map((row) => ({
-      sessionId: String(row.session_id),
-      title: row.title === null || row.title === undefined ? null : String(row.title),
-      cwd: row.cwd === null || row.cwd === undefined ? null : String(row.cwd),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-      messageCount: Number(row.message_count),
-      toolCount: Number(row.tool_count),
-      kind: (row.subagent_kind === 'child' ? 'child' : 'main'),
-    }))
+      ORDER BY ${order} LIMIT ?`).all(...params, limit) as Array<Record<string, unknown>>
+    return rows.map((row) => this.timelineNode(row))
   }
 
-    /** 单会话二级时间线：按 turn 聚合的消息序列（时间升序）。 */
+  private timelineNode(row: Record<string, unknown>): TimelineNode {
+    const sessionId = String(row.session_id)
+    const messages = this.db.prepare(`SELECT seq, kind, time, turn, text_main, text_tool
+      FROM messages WHERE session_id = ? ORDER BY time ASC, seq ASC LIMIT 1`).all(sessionId) as Array<Record<string, unknown>>
+    const latest = this.db.prepare(`SELECT seq, kind, time, turn, text_main, text_tool
+      FROM messages WHERE session_id = ? ORDER BY time DESC, seq DESC LIMIT 1`).all(sessionId) as Array<Record<string, unknown>>
+    const summary = (r: Record<string, unknown> | undefined): TimelineMessageSummary | null => r === undefined ? null : ({
+      seq: Number(r.seq), kind: r.kind as MessageKind, time: Number(r.time), turn: r.turn == null ? null : Number(r.turn),
+      text: String(r.text_main || r.text_tool || '').slice(0, 240),
+    })
+    return {
+      sessionId, title: row.title == null ? null : String(row.title), cwd: row.cwd == null ? null : String(row.cwd),
+      createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), messageCount: Number(row.message_count), toolCount: Number(row.tool_count),
+      kind: row.subagent_kind === 'child' ? 'child' : 'main', parentSessionId: row.parent_session_id == null ? null : String(row.parent_session_id),
+      firstMessage: summary(messages[0]), latestMessage: summary(latest[0]),
+    }
+  }
+
+  /** 单会话二级时间线：按 turn 聚合的消息序列（时间升序）。 */
   turns(sessionId: string, limit = 200): TimelineTurn[] {
     const cap = Math.min(Math.max(limit, 1), 500)
     const rows = this.db.prepare(`SELECT seq, kind, time, turn, text_main

@@ -1,24 +1,10 @@
 /**
- * client/views/TimelineView.tsx —— 两级时间线画布视图（@xyflow/react）。
- *
- * 上层：会话 → 分组卡片（按 cwd 分组，主代理/子代理两种配色）。
- * 下层：选中卡片后原位展开该会话的二级时间条（按消息时间升序，turn 刻度），
- *       点击时间条跳转真实会话；再次点击卡片折叠。
- *
- * 修复史：0.2.0 因缺 @xyflow/react 官方基础 CSS 崩坏而隐藏入口（bundle-entry
- * 统一注入，build-client.mjs 有产物断言防回归）；0.4.0 两级下钻 + 主/子代理配色。
+ * Timeline overview: searchable session grid + in-place message summary detail.
+ * This intentionally does not jump to the original conversation: the host has
+ * no stable anchor API yet, so the plugin must remain useful on its own.
  */
-
-import { useMemo, useCallback } from 'react'
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type Node,
-  type Edge,
-} from '@xyflow/react'
-import type { TimelineNode, TimelineTurnsResponse } from '../../protocol.js'
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import type { TimelineNode, TimelineTurnsResponse, TimelineNodeKind } from '../../protocol.js'
 import { useI18n, type LocaleServiceLike } from '../i18n.js'
 
 export interface TimelineViewProps {
@@ -28,153 +14,74 @@ export interface TimelineViewProps {
   onSelectSession: (sessionId: string) => void
   onDrillTurn: (sessionId: string) => void
   onPreview: (sessionId: string, seq: number | null) => void
+  onFilter: (options: Record<string, unknown>) => void
   locale?: LocaleServiceLike
 }
 
-const COLOR_MAIN = '#3b82f6'
-const COLOR_CHILD = '#8b5cf6'
-const GROUP_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16']
+const KIND_OPTIONS: Array<{ value: TimelineNodeKind | 'all'; key: 'timelineAll' | 'timelineMain' | 'timelineChild' }> = [
+  { value: 'all', key: 'timelineAll' }, { value: 'main', key: 'timelineMain' }, { value: 'child', key: 'timelineChild' },
+]
 
-export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession, onDrillTurn, onPreview, locale }: TimelineViewProps) {
+const formatTime = (value: number): string => new Date(value).toLocaleString()
+const kindLabel = (kind: string, t: (key: any, vars?: Record<string, string>) => string): string => kind === 'user' ? t('kindUser' as never) : kind === 'assistant' ? t('kindAssistant' as never) : kind === 'steering' ? t('kindSteering' as never) : t('kindTool' as never)
+const shortCwd = (value: string | null): string => value ? (value.split(/[\/]/).filter(Boolean).pop() ?? value) : ''
+
+export function TimelineView({ nodes, selectedSessionId, turns, onSelectSession, onDrillTurn, onPreview, onFilter, locale }: TimelineViewProps) {
   const { t } = useI18n(locale)
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState<TimelineNodeKind | 'all'>('all')
+  const [sort, setSort] = useState<'updated' | 'created' | 'messages'>('updated')
+  const [expandedSeq, setExpandedSeq] = useState<number | null>(null)
 
-  // 按 cwd 分组；无 cwd 归入「未知目录」文案键。
-  const groups = useMemo(() => {
-    const map = new Map<string, TimelineNode[]>()
-    for (const node of nodes) {
-      const key = node.cwd ?? ''
-      const list = map.get(key) ?? []
-      list.push(node)
-      map.set(key, list)
-    }
-    return [...map.entries()].sort((a, b) => {
-      const aMax = Math.max(...a[1].map((n) => n.updatedAt))
-      const bMax = Math.max(...b[1].map((n) => n.updatedAt))
-      return bMax - aMax
-    })
-  }, [nodes])
+  const selected = selectedSessionId === null ? null : nodes.find(n => n.sessionId === selectedSessionId) ?? null
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return nodes.filter(n => {
+      if (kind !== 'all' && n.kind !== kind) return false
+      if (!q) return true
+      const hay = [n.title, n.cwd, n.sessionId, n.firstMessage?.text, n.latestMessage?.text].filter(Boolean).join(' ').toLowerCase()
+      return hay.includes(q)
+    }).sort((a,b) => sort === 'created' ? b.createdAt-a.createdAt : sort === 'messages' ? b.messageCount-a.messageCount : b.updatedAt-a.updatedAt)
+  }, [nodes, query, kind, sort])
 
-  const { flowNodes, flowEdges } = useMemo(() => {
-    const flowNodes: Node[] = []
-    const flowEdges: Edge[] = []
-    let groupIndex = 0
-    let y = 26
-    for (const [cwdKey, group] of groups) {
-      const groupColor = GROUP_COLORS[groupIndex % GROUP_COLORS.length]
-      groupIndex++
-      const sorted = [...group].sort((a, b) => a.createdAt - b.createdAt)
-      const groupLabel = cwdKey === '' ? t('timelineUnknownDir') : (cwdKey.split('/').pop() || cwdKey)
-      const countLabel = t('timelineSessionCount', { n: String(sorted.length) })
-      const groupWidth = Math.max(240, sorted.length * 190 + (sorted.length - 1) * 24)
+  const applyQuery = useCallback((value: string) => { setQuery(value); onFilter({ query: value, ...(kind === 'all' ? {} : { kinds: [kind] }), sort }) }, [kind, sort, onFilter])
+  const applyKind = useCallback((value: TimelineNodeKind | 'all') => { setKind(value); onFilter({ query, ...(value === 'all' ? {} : { kinds: [value] }), sort }) }, [query, sort, onFilter])
+  const applySort = useCallback((value: 'updated' | 'created' | 'messages') => { setSort(value); onFilter({ query, ...(kind === 'all' ? {} : { kinds: [kind] }), sort: value }) }, [query, kind, onFilter])
 
-      flowNodes.push({
-        id: 'glabel-' + cwdKey,
-        position: { x: 2, y: y - 22 },
-        draggable: false,
-        selectable: false,
-        data: { label: groupLabel + ' · ' + countLabel },
-        style: { background: 'transparent', border: 'none', boxShadow: 'none', padding: 0, fontSize: 12, fontWeight: 600, color: groupColor, width: groupWidth },
-      })
-      flowNodes.push({
-        id: 'group-' + cwdKey,
-        position: { x: 0, y },
-        type: 'group' as never,
-        data: { label: '' },
-        style: { width: groupWidth, minHeight: 120, borderColor: groupColor, background: 'transparent' },
-      })
-
-      let x = 16
-      for (const session of sorted) {
-        const isChild = session.kind === 'child'
-        const color = isChild ? COLOR_CHILD : COLOR_MAIN
-        const selected = session.sessionId === selectedSessionId
-        flowNodes.push({
-          id: session.sessionId,
-          parentId: 'group-' + cwdKey,
-          extent: 'parent' as never,
-          position: { x, y: 24 },
-          data: {
-            label: session.title ?? session.sessionId,
-            kind: session.kind,
-            createdAt: session.createdAt,
-            updatedAt: session.updatedAt,
-            messageCount: session.messageCount,
-            toolCount: session.toolCount,
-            color,
-          },
-          style: {
-            width: 180,
-            borderColor: color,
-            borderRadius: 10,
-            fontSize: 12,
-            background: selected ? 'color-mix(in srgb, ' + color + ' 22%, transparent)' : 'var(--dsw-alias-bg-elevated, #fff)',
-            boxShadow: selected ? '0 0 0 2px ' + color : undefined,
-          },
-        })
-        x += 190 + 24
-      }
-      y += 150
-    }
-    return { flowNodes, flowEdges }
-  }, [groups, selectedSessionId, t])
-
-  const onNodeClick = useCallback((_event: unknown, node: Node) => {
-    if (node.id.startsWith('group-') || node.id.startsWith('glabel-')) return
-    onSelectSession(node.id)
-  }, [onSelectSession])
-
-  const selected = selectedSessionId === null ? null : nodes.find((n) => n.sessionId === selectedSessionId) ?? null
-
-  if (nodes.length === 0) {
-    return <div className="sex-empty">{t('timelineEmpty')}</div>
-  }
-
-  return (
-    <div className="sex-timeline">
-      <div className="sex-flow">
-        <ReactFlow
-          nodes={flowNodes}
-          edges={flowEdges}
-          onNodeClick={onNodeClick as never}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background gap={20} size={1} />
-          <Controls />
-          <MiniMap pannable zoomable />
-        </ReactFlow>
+  if (nodes.length === 0) return <div className="sex-empty">{t('timelineEmpty')}</div>
+  return <div className="sex-timeline-overview">
+    <div className="sex-timeline-toolbar">
+      <input className="sex-input sex-timeline-search" value={query} placeholder={t('timelineSearchPlaceholder')} onChange={e => applyQuery(e.target.value)} />
+      <div className="sex-timeline-filters">
+        {KIND_OPTIONS.map(option => <button key={option.value} type="button" className={'sex-filter-chip' + (kind === option.value ? ' sex-filter-chip-on' : '')} onClick={() => applyKind(option.value)}>{t(option.key)}</button>)}
       </div>
-      {selected !== null && (
-        <div className="sex-drill">
-          <div className="sex-drill-head">
-            <span className="sex-drill-title">{selected.title ?? selected.sessionId}</span>
-            <span className="sex-drill-meta">{t('timelineTurnCount', { n: String(selected.messageCount) })}</span>
-            <button type="button" className="sex-mini-btn" onClick={() => { onDrillTurn(selected.sessionId) }}>{t('timelineOpenSession')}</button>
-          </div>
-          <div className="sex-drill-body">
-            {turns.status === 'loading' && <div className="sex-empty">{t('previewLoading')}</div>}
-            {turns.status === 'error' && <div className="sex-error">{turns.error}</div>}
-            {turns.status === 'ready' && turns.data && (
-              turns.data.turns.length === 0
-                ? <div className="sex-empty">{t('timelineNoTurns')}</div>
-                : (
-                  <div className="sex-drill-track">
-                    {turns.data.turns.map((turn) => (
-                      <button
-                        key={turn.seq}
-                        type="button"
-                        className={'sex-drill-dot' + (turn.kind === 'user' ? ' sex-drill-dot-user' : '')}
-                        title={turn.text || ('#' + turn.seq)}
-                        onClick={() => { onDrillTurn(selected.sessionId) }}
-                      />
-                    ))}
-                  </div>
-                )
-            )}
-          </div>
-        </div>
-      )}
+      <select className="sex-timeline-sort" value={sort} aria-label={t('timelineSort')} onChange={e => applySort(e.target.value as typeof sort)}>
+        <option value="updated">{t('timelineSortUpdated')}</option><option value="created">{t('timelineSortCreated')}</option><option value="messages">{t('timelineSortMessages')}</option>
+      </select>
+      <span className="sex-timeline-count">{t('timelineVisibleCount', { n: String(visible.length) })}</span>
     </div>
-  )
+    <div className="sex-timeline-main">
+      <div className="sex-session-grid">
+        {visible.map(node => <button key={node.sessionId} type="button" className={'sex-session-card sex-session-card-' + node.kind + (selectedSessionId === node.sessionId ? ' sex-session-card-selected' : '')} onClick={() => onSelectSession(node.sessionId)}>
+          <div className="sex-session-card-head"><strong>{node.title ?? node.sessionId.slice(0, 12)}</strong><span className="sex-kind-badge">{t(node.kind === 'child' ? 'timelineChild' : 'timelineMain')}</span></div>
+          <div className="sex-session-card-meta">{shortCwd(node.cwd) || t('timelineUnknownDir')} · {formatTime(node.updatedAt)}</div>
+          <div className="sex-session-card-stats">{t('timelineMessages', { n: String(node.messageCount) })} · {t('timelineTools', { n: String(node.toolCount) })}</div>
+          <div className="sex-session-card-summary">{node.latestMessage?.text || node.firstMessage?.text || t('timelineNoSummary')}</div>
+        </button>)}
+      </div>
+      {selected && <aside className="sex-session-detail">
+        <div className="sex-session-detail-head"><div><h3>{selected.title ?? selected.sessionId}</h3><div className="sex-session-detail-meta">{shortCwd(selected.cwd) || t('timelineUnknownDir')} · {formatTime(selected.createdAt)} → {formatTime(selected.updatedAt)}</div></div><span className="sex-kind-badge">{t(selected.kind === 'child' ? 'timelineChild' : 'timelineMain')}</span></div>
+        <div className="sex-session-detail-lineage">{t('timelineLineage')}: {selected.parentSessionId ? selected.parentSessionId.slice(0, 12) : t('timelineRootSession')}</div>
+        <div className="sex-message-summary-list">
+          {turns.status === 'loading' && <div className="sex-empty">{t('previewLoading')}</div>}
+          {turns.status === 'error' && <div className="sex-error">{turns.error}</div>}
+          {turns.status === 'ready' && turns.data?.turns.map(message => <div key={message.seq} className={'sex-message-summary sex-message-summary-' + message.kind}>
+            <button type="button" className="sex-message-summary-toggle" onClick={() => setExpandedSeq(expandedSeq === message.seq ? null : message.seq)}><span className="sex-kind-badge">{kindLabel(message.kind, t)}</span><span>{formatTime(message.time)}</span><span>#{message.seq}</span><span className="sex-message-summary-text">{message.text || t('timelineNoSummary')}</span></button>
+            {expandedSeq === message.seq && <div className="sex-message-expanded">{message.text || t('timelineNoSummary')}<div className="sex-message-expanded-note">{t('timelineNoAnchor')}</div></div>}
+          </div>)}
+          {turns.status === 'ready' && turns.data?.turns.length === 0 && <div className="sex-empty">{t('timelineNoTurns')}</div>}
+        </div>
+      </aside>}
+    </div>
+  </div>
 }

@@ -322,141 +322,43 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
   margin: 10px 16px;
 }
 
-/* 时间线 */
-.sex-timeline {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sex-flow {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-
-.sex-flow .react-flow__node {
-  font-size: 12px;
-}
-
-.sex-flow .react-flow__node-group {
-  border: 1px dashed;
-}
-
-/* 二级时间线：选中卡片后下方展开 */
-.sex-drill {
-  flex: none;
-  max-height: 42%;
-  border-top: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
-  display: flex;
-  flex-direction: column;
-  background: var(--dsw-alias-bg-layer-2, #f9fafb);
-}
-
-.sex-drill-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
-}
-
-.sex-drill-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary, #1a1a1a);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sex-drill-meta {
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #888);
-  flex: none;
-}
-
-.sex-drill-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 10px 14px;
-}
-
-.sex-drill-track {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 48px;
-}
-
-.sex-drill-dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--dsw-alias-state-business-primary, #4f46e5);
-  background: var(--dsw-alias-bg-layer-3, #fff);
-  cursor: pointer;
-  padding: 0;
-}
-
-.sex-drill-dot:hover {
-  background: var(--dsw-alias-state-business-primary, #4f46e5);
-}
-
-.sex-drill-dot-user {
-  border-color: var(--dsw-alias-state-success-primary, #059669);
-}
-
-/* @xyflow/react 默认浅色变量；DSH 深色主题不会给它加 .dark 类，
-   这里按 DSH design token 桥接，避免白底 + 近白文字（字与背景同色）。 */
-.sex-flow .react-flow,
-.sex-flow .react-flow.dark {
-  --xy-background-color: var(--dsw-alias-bg-base, #fff);
-  --xy-minimap-background-color: var(--dsw-alias-bg-layer-2, #f9fafb);
-  --xy-minimap-mask-background-color: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.4));
-  --xy-minimap-node-background-color: var(--dsw-alias-bg-elevated, #fff);
-  --xy-node-background-color: var(--dsw-alias-bg-elevated, #fff);
-  --xy-node-border: 1px solid var(--dsw-alias-border-l2, #e5e7eb);
-  --xy-node-color: var(--dsw-alias-label-primary, #1a1a1a);
-  --xy-node-boxshadow-selected: 0 0 0 2px var(--dsw-alias-state-business-primary, #4f46e5);
-  --xy-controls-button-background-color: var(--dsw-alias-bg-layer-2, #f9fafb);
-  --xy-controls-button-background-color-hover: var(--dsw-alias-bg-layer-3, #fff);
-  --xy-controls-button-color: var(--dsw-alias-label-primary, #1a1a1a);
-  --xy-controls-button-border-color: var(--dsw-alias-border-l2, #e5e7eb);
-  --xy-edge-stroke: var(--dsw-alias-label-tertiary, #888);
-  --xy-background-pattern-color: var(--dsw-alias-border-l2, #e5e7eb);
-  --xy-handle-background-color: var(--dsw-alias-label-primary, #1a1a1a);
-  --xy-handle-border-color: var(--dsw-alias-bg-base, #fff);
-}
-
-/* 深色主题：浮层/节点背景钉死实色，避免半透明主题变量透底 */
-body[data-ds-dark-theme] .sex-flow .react-flow {
-  --xy-background-color: #141414;
-  --xy-minimap-background-color: #1e1e1e;
-  --xy-node-background-color: #232324;
-  --xy-node-color: #e8e8e8;
-  --xy-node-border: 1px solid #3c3c3c;
-  --xy-controls-button-background-color: #2c2c2e;
-  --xy-controls-button-background-color-hover: #3a3a3d;
-  --xy-controls-button-color: #e8e8e8;
-  --xy-controls-button-border-color: #3c3c3c;
-  --xy-edge-stroke: #9a9a9a;
-  --xy-background-pattern-color: #3c3c3c;
-  --xy-handle-background-color: #e8e8e8;
-  --xy-handle-border-color: #232324;
-}
-
-body[data-ds-dark-theme] .sex-drill {
-  background: #232324;
-}
-
-body[data-ds-dark-theme] .sex-drill-title {
-  color: #e8e8e8;
-}
-
+/* Timeline overview: dense, searchable session cards; no canvas dependency. */
+.sex-timeline-overview { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.sex-timeline-toolbar { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb); background: var(--dsw-alias-bg-base, #fff); }
+.sex-timeline-search { min-width: 220px; max-width: 420px; }
+.sex-timeline-filters { display: flex; gap: 5px; }
+.sex-filter-chip { border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); background: var(--dsw-alias-bg-layer-2, #f9fafb); color: var(--dsw-alias-label-secondary, #555); border-radius: 999px; padding: 4px 9px; cursor: pointer; font-size: 11px; }
+.sex-filter-chip-on { border-color: var(--dsw-alias-state-business-primary, #4f46e5); color: var(--dsw-alias-state-business-primary, #4f46e5); background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4f46e5) 12%, transparent); }
+.sex-timeline-sort { height: 28px; border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-radius: 7px; background: var(--dsw-alias-bg-layer-2, #f9fafb); color: var(--dsw-alias-label-primary, #1a1a1a); padding: 0 7px; }
+.sex-timeline-count { margin-left: auto; color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; }
+.sex-timeline-main { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+.sex-session-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; align-items: start; }
+.sex-session-card { min-width: 0; text-align: left; padding: 12px; border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-left: 4px solid var(--dsw-alias-state-business-primary, #4f46e5); border-radius: 10px; background: var(--dsw-alias-bg-elevated, #fff); color: var(--dsw-alias-label-primary, #1a1a1a); cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s; }
+.sex-session-card:hover { border-color: var(--dsw-alias-border-l3, #c7d2fe); transform: translateY(-1px); }
+.sex-session-card-selected { box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary, #4f46e5); }
+.sex-session-card-child { border-left-color: var(--dsw-alias-state-business-primary, #8b5cf6); }
+.sex-session-card-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sex-session-card-head strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.sex-kind-badge { flex: none; border-radius: 999px; padding: 2px 6px; background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4f46e5) 14%, transparent); color: var(--dsw-alias-state-business-primary, #4f46e5); font-size: 10px; }
+.sex-session-card-meta, .sex-session-card-stats { color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sex-session-card-summary { color: var(--dsw-alias-label-secondary, #555); font-size: 12px; line-height: 18px; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sex-session-detail { margin-top: 14px; border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-radius: 12px; background: var(--dsw-alias-bg-elevated, #fff); color: var(--dsw-alias-label-primary, #1a1a1a); overflow: hidden; }
+.sex-session-detail-head { display: flex; justify-content: space-between; gap: 10px; padding: 14px; border-bottom: 1px solid var(--dsw-alias-border-l2, #e5e7eb); }
+.sex-session-detail-head h3 { margin: 0; font-size: 15px; }
+.sex-session-detail-meta, .sex-session-detail-lineage { margin-top: 5px; color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; }
+.sex-session-detail-lineage { padding: 0 14px 10px; }
+.sex-message-summary-list { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 14px; }
+.sex-message-summary { border: 1px solid var(--dsw-alias-border-l2, #e5e7eb); border-radius: 8px; overflow: hidden; }
+.sex-message-summary-toggle { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: var(--dsw-alias-bg-layer-2, #f9fafb); color: var(--dsw-alias-label-primary, #1a1a1a); padding: 8px 10px; text-align: left; cursor: pointer; font-size: 11px; }
+.sex-message-summary-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-secondary, #555); }
+.sex-message-expanded { padding: 10px; background: var(--dsw-alias-bg-base, #fff); color: var(--dsw-alias-label-primary, #1a1a1a); font-size: 12px; line-height: 18px; white-space: pre-wrap; }
+.sex-message-expanded-note { margin-top: 7px; color: var(--dsw-alias-label-tertiary, #888); font-size: 10px; }
+body[data-ds-dark-theme] .sex-timeline-toolbar, body[data-ds-dark-theme] .sex-session-detail { background: #232324; color: #e8e8e8; }
+body[data-ds-dark-theme] .sex-session-grid .sex-session-card { background: #2c2c2e; color: #f2f2f2; border-color: #55555a; }
+body[data-ds-dark-theme] .sex-session-grid .sex-session-card-summary { color: #c9c9cf; }
+body[data-ds-dark-theme] .sex-session-card-meta, body[data-ds-dark-theme] .sex-session-card-stats, body[data-ds-dark-theme] .sex-session-detail-meta, body[data-ds-dark-theme] .sex-session-detail-lineage { color: #b2b2ba; }
+body[data-ds-dark-theme] .sex-message-summary-toggle { background: #303033; color: #f2f2f2; }
+body[data-ds-dark-theme] .sex-message-expanded { background: #232324; color: #f2f2f2; }
 /* 预览 */
 .sex-preview {
   display: flex;
@@ -667,3 +569,14 @@ body[data-ds-dark-theme] .sex-drill-title {
 .sex-primary-btn:hover:not(:disabled) {
   background: var(--dsw-alias-button-info-hover, #4338ca);
 }
+
+/* Explicit theme surfaces: fallback colors must remain readable even when the host token set is incomplete. */
+body[data-ds-dark-theme] .sex-app { background: #18181a; color: #f2f2f2; }
+body[data-ds-dark-theme] .sex-timeline-toolbar { background: #232324; border-color: #46464b; }
+body[data-ds-dark-theme] .sex-timeline-search, body[data-ds-dark-theme] .sex-timeline-sort { background: #2c2c2e; color: #f2f2f2; border-color: #55555a; }
+body[data-ds-dark-theme] .sex-filter-chip { background: #2c2c2e; color: #d7d7dd; border-color: #55555a; }
+body[data-ds-dark-theme] .sex-filter-chip-on { color: #b9a7ff; border-color: #9d85ff; background: #3a315c; }
+body[data-ds-dark-theme] .sex-timeline-count { color: #b2b2ba; }
+body[data-ds-dark-theme] .sex-session-card-main { border-left-color: #65a6ff; }
+body[data-ds-dark-theme] .sex-session-card-child { border-left-color: #b59aff; }
+body[data-ds-dark-theme] .sex-kind-badge { background: #3a315c; color: #c5b7ff; }

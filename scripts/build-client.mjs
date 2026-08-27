@@ -6,7 +6,6 @@
  *   window.__ModuleLoader__.load({ id: "dsh-session-explorer", factory: (require) => {
  * - react / react-dom / react/jsx-runtime / @deepseek-ai/dsh-client-ui-primitives 等
  *   platform seed 词保持 external（运行时由 loader 注入的 require 解答）
- * - @xyflow/react 及其依赖内联
  * - CJS 输出的 intro 必须提供 module/exports（浏览器没有 CommonJS 全局）
  * - 产物最后一行必须是 } });
  *
@@ -43,6 +42,7 @@ const EXTERNALS = [
   '@deepseek-ai/dsh-client-ui-primitives',
   '@deepseek-ai/dsh-client-ui-attachment',
   '@deepseek-ai/dsh-client-schema-form',
+  '@xyflow/react',
 ]
 
 async function main() {
@@ -93,11 +93,6 @@ async function main() {
   }
   if (code.includes('require("@xyflow/react")')) {
     throw new Error('client bundle inline assertion failed: @xyflow/react leaked as an external require')
-  }
-  // @xyflow/react 官方基础 CSS 必须内联进 bundle（moduleTypes text 把 css 变字符串，
-  // bundle-entry 注入 <style>）。缺失会整画布崩坏——0.2.0 隐藏入口事故的根因。
-  if (!code.includes('--xy-node-border-radius') && !code.includes('.react-flow__minimap')) {
-    throw new Error('client bundle css assertion failed: @xyflow/react dist/style.css not inlined (canvas would render broken)')
   }
   // rolldown 可能把 intro 重写成等价形式：var exports = { exports: {} }.exports
   const introOk = chunk.code.includes('var module = { exports: {} }')

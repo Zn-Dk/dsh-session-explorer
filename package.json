@@ -62,8 +62,6 @@
     "tsx": "^4.19.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {
-    "@xyflow/react": "^12.3.0"
-  },
+  "dependencies": {},
   "peerDependenciesMeta": {}
 }

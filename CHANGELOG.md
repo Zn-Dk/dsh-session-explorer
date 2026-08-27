@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- 时间线重构为可搜索 CSS Grid 会话总览：支持主代理/子代理筛选、标题/cwd/消息摘要搜索，以及按更新时间、创建时间、消息数量排序。
+- 会话卡片详情：展示会话元数据、主/子代理 lineage、首条/最近消息摘要，并支持消息摘要原位展开；不依赖原始会话锚点跳转。
+
+### 变更
+- 移除 @xyflow/react 画布、MiniMap、Controls 与横向点阵布局，改用语义化会话卡片和消息摘要列表。
+- 索引 schema v3→v4：增加 parent_session_id、subagent_kind 及时间线摘要/过滤所需字段，旧库自动迁移。
+- 浅色/深色主题改用明确的语义 surface、文字与边框 token，修复深色模式文字与节点背景对比不足。
+
 本项目的所有显著变更都记录在此文件。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [0.3.0] - 2026-08-24
