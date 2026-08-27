@@ -94,6 +94,11 @@ async function main() {
   if (code.includes('require("@xyflow/react")')) {
     throw new Error('client bundle inline assertion failed: @xyflow/react leaked as an external require')
   }
+  // @xyflow/react 官方基础 CSS 必须内联进 bundle（moduleTypes text 把 css 变字符串，
+  // bundle-entry 注入 <style>）。缺失会整画布崩坏——0.2.0 隐藏入口事故的根因。
+  if (!code.includes('--xy-node-border-radius') && !code.includes('.react-flow__minimap')) {
+    throw new Error('client bundle css assertion failed: @xyflow/react dist/style.css not inlined (canvas would render broken)')
+  }
   // rolldown 可能把 intro 重写成等价形式：var exports = { exports: {} }.exports
   const introOk = chunk.code.includes('var module = { exports: {} }')
     || chunk.code.includes('var exports = { exports: {} }')

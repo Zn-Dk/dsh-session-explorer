@@ -158,15 +158,13 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
           >
             {t('searchTab')}
           </button>
-          {/* 时间线入口暂时隐藏：@xyflow/react 画布存在严重渲染 bug，修复后恢复。
-              保留 TimelineView 组件与路由，仅隐藏入口（view.name === 'timeline' 分支仍可被代码进入）。 */}
-          {/* <button
+          <button
             type="button"
             className={'sex-tab' + (view.name === 'timeline' ? ' sex-tab-on' : '')}
             onClick={openTimeline}
           >
             {t('timelineTab')}
-          </button> */}
+          </button>
         </div>
         <div className="sex-header-right">
           {indexStatus && (
@@ -201,7 +199,8 @@ export function App({ client, store, onOpenSession, onClose, Tooltip, locale }: 
           ? <div className="sex-empty">{t('loadingTimeline')}</div>
           : timeline.status === 'error'
             ? <div className="sex-error">{timeline.error}</div>
-            : <TimelineView client={client} nodes={timeline.nodes} onPreview={openPreview} />)}
+            : <TimelineView nodes={timeline.nodes} onPreview={openPreview}
+            locale={locale} />)}
         {view.name === 'preview' && (
           <PreviewView
             client={client}

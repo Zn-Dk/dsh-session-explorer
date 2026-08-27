@@ -69,6 +69,8 @@ export const I18N = {
     'hitLabel': '命中',
     'noContent': '(无内容)',
     'timelineEmpty': '暂无会话',
+  'timelineUnknownDir': '(未知目录)',
+  'timelineSessionCount': '{n} 个会话',
   },
   en: {
     'backToSession': 'Back to session',
@@ -129,6 +131,8 @@ export const I18N = {
     'hitLabel': 'hit',
     'noContent': '(no content)',
     'timelineEmpty': 'No sessions yet',
+  'timelineUnknownDir': '(unknown directory)',
+  'timelineSessionCount': '{n} sessions',
   },
 } as const
 
