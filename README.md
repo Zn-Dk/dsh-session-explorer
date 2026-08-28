@@ -2,7 +2,7 @@
 
 > **English** | [中文](./README.zh.md)
 
-Out-of-tree DSH Web plugin: message-level full-text search across sessions. Search a specific message (user / assistant / tool / system-injected), preview context read-only, and jump to the real session with one click.
+DSH Web plugin: message-level full-text search across sessions. Search a specific message (user / assistant / tool / system-injected), preview context read-only, and jump to the real session with one click.
 
 ## Features
 
