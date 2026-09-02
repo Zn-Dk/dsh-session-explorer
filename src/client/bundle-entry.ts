@@ -1,6 +1,6 @@
 /**
  * client/bundle-entry.ts —— ModuleLoader bundle 工厂（打包脚本入口）。
- * scripts/build-client.mjs 把它打包成 lib/client.js（react 外置、xyflow 内联）。
+ * scripts/build-client.mjs 把它打包成 lib/client.js（react 外置）。
  *
  * 挂载策略（对齐 @linxin666/dsh-ssh 的 DOM 注入模式）：
  *  - 侧栏：DOM 注入一个入口按钮（插在既有工具入口 family 之后），自愈重插

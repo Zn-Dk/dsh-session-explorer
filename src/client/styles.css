@@ -20,7 +20,7 @@ html[data-dsh-session-explorer-active] [class*=centerCol] > :not([data-dsh-sessi
   display: none !important;
 }
 /**
- * client/styles.css —— 面板样式（DSH design tokens + xyflow 覆盖）。
+ * client/styles.css —— 面板样式（DSH design tokens）。
  * 构建脚本会把它内联进 bundle（tagId 幂等注入）。
  */
 
